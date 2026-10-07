@@ -1,10 +1,29 @@
-# 0-Virgin Template
+# 🪐 Razoonium
+
+Jeu de stratégie tour par tour quotidien (4 à 8 joueurs) en **Progressive Web App** — voir [rules.md](rules.md).
 
 Application web full-stack déployée sur **Google Cloud Run** (backend) et **Firebase Hosting** (frontend).
 
 - **Backend** : Node.js + Express 5
 - **Frontend** : Vue 3 + Vite + Vuetify
 - **Base de données** : Firestore
+- **PWA** : vite-plugin-pwa (manifest, service worker, installable sur mobile)
+- **Auth** : pseudo + mot de passe (scrypt), session JWT
+- **Résolution des tours** : Cloud Scheduler → `POST /api/cron/tick` toutes les 5 min, plus une résolution à la volée dès qu'un joueur consulte une partie échue
+
+## Organisation du code
+
+| Fichier | Rôle |
+|---|---|
+| `backend/services/game.engine.js` | Règles du jeu (fonctions pures : validation des ordres, résolution d'un tour) |
+| `backend/services/game.service.js` | Parties Firestore : lobby, ordres secrets, résolution transactionnelle |
+| `backend/services/auth.service.js` | Comptes et JWT |
+| `frontend/src/views/Game.vue` | Salle d'attente + console de jeu |
+| `frontend/src/styles/razoonium.css` | Thème néon |
+
+Firestore : `users/{pseudo}`, `games/{id}` (état public de la partie), `games/{id}/orders/{uid}` (ordres secrets du jour, jamais renvoyés aux autres joueurs).
+
+Icônes PWA : générées depuis `frontend/public/favicon.svg` avec `cd frontend && npx pwa-assets-generator`.
 
 ---
 
@@ -76,7 +95,9 @@ npm run dev   # backend :8080 + frontend :5173
 | `PORT` | normale | Port d'écoute du serveur (défaut : `8080`) |
 | `ALLOWED_ORIGIN` | normale | Origine CORS autorisée |
 | `GOOGLE_CLOUD_PROJECT` | normale | ID du projet GCP |
-| `API_SECRET_KEY` | **secret** | Clé secrète pour les endpoints sensibles |
+| `MIN_PLAYERS` | normale | Joueurs minimum pour lancer (défaut : 4, mettre 2 pour tester) |
+| `API_SECRET_KEY` | **secret** | Clé envoyée par Cloud Scheduler (en-tête `x-api-key`) |
+| `JWT_SECRET` | **secret** | Signature des sessions |
 
 Les variables normales sont déclarées dans `cloud-run.dev.yaml` / `cloud-run.prod.yaml` et injectées automatiquement au déploiement.
 

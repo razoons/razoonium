@@ -1,0 +1,1053 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Razoonium</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;900&family=Rajdhani:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#04060d;
+  --panel:rgba(10,18,38,.78);
+  --panel-2:rgba(16,28,58,.72);
+  --line:rgba(0,240,255,.18);
+  --line-strong:rgba(0,240,255,.45);
+  --text:#d9f3ff;
+  --muted:#7b93ad;
+  --cyan:#00f0ff;
+  --magenta:#ff2bd6;
+  --lime:#9dff4a;
+  --amber:#ffb020;
+  --red:#ff4d6d;
+  --violet:#8a7dff;
+  --glow:0 0 12px rgba(0,240,255,.35);
+}
+*{box-sizing:border-box}
+html,body{margin:0;min-height:100%}
+body{
+  background:
+    radial-gradient(1200px 600px at 15% -10%, rgba(0,240,255,.12), transparent 60%),
+    radial-gradient(900px 500px at 110% 10%, rgba(255,43,214,.10), transparent 60%),
+    radial-gradient(800px 600px at 50% 120%, rgba(138,125,255,.12), transparent 60%),
+    var(--bg);
+  color:var(--text);
+  font-family:'Rajdhani',system-ui,sans-serif;
+  font-size:16px;
+  overflow-x:hidden;
+}
+.bg-grid{
+  position:fixed;inset:0;pointer-events:none;z-index:0;
+  background-image:
+    linear-gradient(rgba(0,240,255,.06) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0,240,255,.06) 1px, transparent 1px);
+  background-size:44px 44px;
+  mask-image:radial-gradient(ellipse at 50% 40%, #000 30%, transparent 85%);
+  animation:drift 40s linear infinite;
+}
+@keyframes drift{to{background-position:44px 44px,44px 44px}}
+.scan{
+  position:fixed;inset:0;pointer-events:none;z-index:50;
+  background:repeating-linear-gradient(0deg, rgba(255,255,255,.018) 0 1px, transparent 1px 3px);
+}
+h1,h2,h3,.orb{font-family:'Orbitron',sans-serif;letter-spacing:.08em}
+button{font-family:'Orbitron',sans-serif;cursor:pointer}
+
+/* ---------- Top bar ---------- */
+.top{
+  position:relative;z-index:2;
+  display:grid;grid-template-columns:auto 1fr auto auto;gap:20px;align-items:center;
+  padding:14px 22px;
+  border-bottom:1px solid var(--line);
+  background:linear-gradient(180deg, rgba(4,8,20,.95), rgba(4,8,20,.6));
+  backdrop-filter:blur(8px);
+}
+.brand{font-family:'Orbitron';font-weight:900;font-size:22px;letter-spacing:.22em;
+  background:linear-gradient(90deg,var(--cyan),var(--magenta));-webkit-background-clip:text;background-clip:text;color:transparent;
+  filter:drop-shadow(0 0 8px rgba(0,240,255,.4));white-space:nowrap}
+.brand small{display:block;font-size:10px;letter-spacing:.4em;color:var(--muted);-webkit-text-fill-color:var(--muted);font-weight:500;margin-top:2px}
+.daybox{display:flex;align-items:center;gap:14px;min-width:0}
+.daybox .num{font-family:'Orbitron';font-weight:700;font-size:20px;white-space:nowrap}
+.daybox .num b{color:var(--cyan);text-shadow:var(--glow);font-size:26px}
+.progress{flex:1;max-width:420px;height:8px;display:grid;grid-template-columns:repeat(15,1fr);gap:3px}
+.progress i{background:rgba(0,240,255,.1);border:1px solid rgba(0,240,255,.15);transform:skewX(-20deg)}
+.progress i.done{background:var(--cyan);box-shadow:0 0 8px var(--cyan)}
+.progress i.now{background:var(--magenta);box-shadow:0 0 10px var(--magenta);animation:pulse 1.4s ease-in-out infinite}
+@keyframes pulse{50%{opacity:.45}}
+.weather{display:flex;align-items:center;gap:10px;padding:6px 14px;border:1px solid var(--line);background:var(--panel);white-space:nowrap}
+.weather .ico{font-size:22px}
+.weather .lbl{font-family:'Orbitron';font-size:11px;letter-spacing:.2em;color:var(--muted)}
+.weather .val{font-weight:700;font-size:16px}
+.top-actions{display:flex;gap:10px}
+
+.btn{
+  border:1px solid var(--line-strong);background:rgba(0,240,255,.06);color:var(--text);
+  padding:10px 16px;font-size:11px;letter-spacing:.18em;text-transform:uppercase;
+  transition:.15s;position:relative;
+}
+.btn:hover{background:rgba(0,240,255,.16);box-shadow:var(--glow)}
+.btn:disabled{opacity:.35;cursor:not-allowed;box-shadow:none}
+.btn.primary{
+  border-color:var(--magenta);color:#fff;
+  background:linear-gradient(90deg, rgba(255,43,214,.35), rgba(0,240,255,.25));
+  box-shadow:0 0 16px rgba(255,43,214,.35);
+}
+.btn.primary:hover{box-shadow:0 0 26px rgba(255,43,214,.6)}
+.btn.ghost{background:transparent;border-color:var(--line)}
+
+/* ---------- Layout ---------- */
+.layout{
+  position:relative;z-index:1;
+  display:grid;grid-template-columns:270px minmax(0,1fr) 320px;gap:18px;
+  padding:18px 22px 40px;max-width:1600px;margin:0 auto;
+}
+.panel{
+  position:relative;background:var(--panel);border:1px solid var(--line);
+  padding:16px;backdrop-filter:blur(6px);
+}
+.panel::before,.panel::after{content:"";position:absolute;width:14px;height:14px;border:2px solid var(--cyan);opacity:.8}
+.panel::before{top:-2px;left:-2px;border-right:0;border-bottom:0}
+.panel::after{bottom:-2px;right:-2px;border-left:0;border-top:0}
+.ptitle{font-family:'Orbitron';font-size:11px;letter-spacing:.3em;color:var(--muted);text-transform:uppercase;margin:0 0 12px;display:flex;justify-content:space-between;align-items:center}
+.ptitle .tag{color:var(--cyan)}
+.stack{display:flex;flex-direction:column;gap:18px}
+
+/* ---------- Players list ---------- */
+.plist{display:flex;flex-direction:column;gap:8px}
+.pcard{
+  --c:var(--cyan);
+  display:grid;grid-template-columns:4px 1fr auto;gap:10px;align-items:center;
+  padding:10px 12px 10px 0;border:1px solid rgba(255,255,255,.06);background:rgba(255,255,255,.02);
+  cursor:pointer;transition:.15s;text-align:left;color:inherit;font-family:inherit;width:100%;
+}
+.pcard:hover{border-color:var(--c);background:rgba(255,255,255,.04)}
+.pcard .bar{height:100%;min-height:38px;background:var(--c);box-shadow:0 0 10px var(--c)}
+.pcard.active{border-color:var(--c);background:linear-gradient(90deg, color-mix(in srgb, var(--c) 18%, transparent), transparent);box-shadow:inset 0 0 20px color-mix(in srgb, var(--c) 15%, transparent)}
+.pcard.dead{opacity:.35;filter:grayscale(1)}
+.pcard .nm{font-weight:700;font-size:17px;line-height:1.1}
+.pcard .meta{font-size:13px;color:var(--muted);display:flex;gap:10px;margin-top:2px}
+.pcard .meta b{color:var(--text);font-weight:600}
+.status{font-family:'Orbitron';font-size:9px;letter-spacing:.15em;padding:4px 6px;border:1px solid currentColor;white-space:nowrap}
+.status.ready{color:var(--lime)}
+.status.wait{color:var(--amber)}
+.status.out{color:var(--red)}
+.readycount{font-size:13px;color:var(--muted);margin-top:12px;text-align:center}
+.readycount b{color:var(--lime)}
+
+/* ---------- Console ---------- */
+.chead{display:flex;align-items:center;gap:16px;flex-wrap:wrap}
+.avatar{
+  width:64px;height:64px;flex:none;display:grid;place-items:center;
+  font-family:'Orbitron';font-weight:900;font-size:26px;color:var(--c);
+  border:2px solid var(--c);box-shadow:0 0 18px color-mix(in srgb, var(--c) 50%, transparent), inset 0 0 18px color-mix(in srgb, var(--c) 30%, transparent);
+  clip-path:polygon(25% 0,75% 0,100% 50%,75% 100%,25% 100%,0 50%);
+  background:rgba(0,0,0,.4);
+}
+.chead .who{flex:1;min-width:160px}
+.chead .who .lbl{font-family:'Orbitron';font-size:10px;letter-spacing:.35em;color:var(--muted)}
+.chead .who h2{margin:2px 0 0;font-size:28px;color:var(--c);text-shadow:0 0 14px color-mix(in srgb, var(--c) 60%, transparent)}
+.navbtns{display:flex;gap:8px}
+
+.stats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin-top:16px}
+.stat{padding:12px 14px;border:1px solid var(--line);background:var(--panel-2);min-width:0}
+.stat .k{font-family:'Orbitron';font-size:9px;letter-spacing:.25em;color:var(--muted);text-transform:uppercase}
+.stat .v{font-family:'Orbitron';font-weight:700;font-size:28px;margin-top:4px;line-height:1}
+.stat .s{font-size:13px;color:var(--muted);margin-top:4px}
+.v.lime{color:var(--lime);text-shadow:0 0 10px rgba(157,255,74,.5)}
+.v.cyan{color:var(--cyan);text-shadow:var(--glow)}
+.v.mag{color:var(--magenta);text-shadow:0 0 10px rgba(255,43,214,.5)}
+.v.red{color:var(--red);text-shadow:0 0 10px rgba(255,77,109,.5)}
+
+.cells{display:flex;flex-wrap:wrap;gap:3px;margin-top:8px}
+.cells i{width:10px;height:16px;background:rgba(157,255,74,.12);border:1px solid rgba(157,255,74,.25)}
+.cells i.on{background:var(--lime);box-shadow:0 0 6px var(--lime)}
+.cells i.lock{background:var(--magenta);box-shadow:0 0 6px var(--magenta);border-color:var(--magenta)}
+
+.layers{display:flex;gap:4px;margin-top:8px;flex-wrap:wrap}
+.layer{font-size:12px;padding:2px 6px;border:1px solid var(--cyan);color:var(--cyan);white-space:nowrap}
+.layer.old{border-color:var(--amber);color:var(--amber)}
+
+.actions{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;margin-top:18px}
+.acard{
+  --a:var(--cyan);
+  position:relative;padding:14px;border:1px solid color-mix(in srgb, var(--a) 30%, transparent);
+  background:linear-gradient(160deg, color-mix(in srgb, var(--a) 10%, transparent), rgba(5,10,24,.6) 60%);
+  display:flex;flex-direction:column;gap:10px;min-width:0;transition:.2s;
+}
+.acard.on{border-color:var(--a);box-shadow:0 0 18px color-mix(in srgb, var(--a) 30%, transparent), inset 0 0 24px color-mix(in srgb, var(--a) 10%, transparent)}
+.acard .hd{display:flex;align-items:center;gap:10px}
+.acard .ic{width:36px;height:36px;display:grid;place-items:center;font-size:20px;color:var(--a);border:1px solid var(--a);transform:rotate(45deg);flex:none}
+.acard .ic span{transform:rotate(-45deg)}
+.acard .nm{font-family:'Orbitron';font-weight:700;font-size:14px;letter-spacing:.12em;color:var(--a);text-transform:uppercase}
+.acard .tg{font-size:11px;color:var(--muted);letter-spacing:.15em;text-transform:uppercase}
+.acard .ds{font-size:14px;color:#a9c1d8;line-height:1.3;min-height:36px}
+.stepper{display:grid;grid-template-columns:38px 1fr 38px;align-items:stretch;border:1px solid color-mix(in srgb, var(--a) 40%, transparent)}
+.stepper button{background:color-mix(in srgb, var(--a) 12%, transparent);border:0;color:var(--a);font-size:18px;font-weight:700;padding:0}
+.stepper button:hover:not(:disabled){background:color-mix(in srgb, var(--a) 30%, transparent)}
+.stepper button:disabled{opacity:.25;cursor:not-allowed}
+.stepper .val{text-align:center;font-family:'Orbitron';font-weight:700;font-size:22px;padding:6px 0;color:#fff}
+select{
+  width:100%;background:rgba(0,0,0,.45);color:var(--text);border:1px solid color-mix(in srgb, var(--a, var(--cyan)) 40%, transparent);
+  padding:8px 10px;font-family:'Rajdhani';font-size:15px;font-weight:600;outline:none;
+}
+select:focus{box-shadow:0 0 0 1px var(--a, var(--cyan))}
+.acard .pv{font-size:13px;color:var(--a);min-height:17px}
+
+.cfoot{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-top:18px;flex-wrap:wrap}
+.cfoot .hint{font-size:13px;color:var(--muted)}
+.locked-msg{margin-top:18px;padding:30px;text-align:center;border:1px dashed var(--red);color:var(--red);font-family:'Orbitron';letter-spacing:.2em}
+
+/* ---------- Side ---------- */
+.lots{display:flex;flex-direction:column;gap:8px}
+.lot{display:flex;align-items:center;justify-content:space-between;padding:10px 12px;border:1px solid rgba(255,43,214,.3);background:linear-gradient(90deg, rgba(255,43,214,.12), transparent)}
+.lot .rk{font-family:'Orbitron';font-size:11px;letter-spacing:.2em;color:var(--muted)}
+.lot .amt{font-family:'Orbitron';font-weight:700;font-size:20px;color:var(--magenta);text-shadow:0 0 10px rgba(255,43,214,.5)}
+.empty{color:var(--muted);font-size:14px;font-style:italic}
+.wtable{display:grid;gap:6px;font-size:14px}
+.wtable div{display:grid;grid-template-columns:44px 90px 1fr;gap:8px;align-items:center;color:#a9c1d8}
+.wtable .d{font-family:'Orbitron';font-size:11px;color:var(--muted)}
+.wtable b{color:var(--text)}
+.log{display:flex;flex-direction:column;gap:12px;max-height:520px;overflow:auto;padding-right:4px}
+.log::-webkit-scrollbar{width:6px}
+.log::-webkit-scrollbar-thumb{background:var(--line-strong)}
+.entry{border-left:2px solid var(--cyan);padding:2px 0 2px 12px}
+.entry h4{margin:0 0 6px;font-family:'Orbitron';font-size:12px;letter-spacing:.15em;display:flex;justify-content:space-between;gap:8px}
+.entry h4 span{color:var(--muted);font-weight:500}
+.entry ul{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:3px;font-size:14px;color:#a9c1d8}
+.entry li::before{content:"▸ ";color:var(--cyan)}
+.entry .bilan{margin-top:8px;display:grid;grid-template-columns:1fr auto;gap:2px 10px;font-size:13px}
+.entry .bilan .up{color:var(--lime)}
+.entry .bilan .down{color:var(--red)}
+
+/* ---------- Modals ---------- */
+.modal{position:fixed;inset:0;z-index:100;display:none;place-items:center;background:rgba(2,4,10,.82);backdrop-filter:blur(6px);padding:16px}
+.modal.open{display:grid}
+.modal .panel{width:min(560px,100%);max-height:calc(100vh - 32px);overflow:auto;padding:28px}
+.modal .panel.wide{width:min(1040px,100%);overflow-x:hidden}
+
+/* ---------- Graphiques ---------- */
+.legend{display:flex;flex-wrap:wrap;gap:6px 14px;margin:0 0 8px;font-size:13px;color:#a9c1d8}
+.legend span,.legend button{display:inline-flex;align-items:center;gap:6px}
+.legend button{background:none;border:0;padding:2px 0;color:inherit;font:inherit;font-weight:600;cursor:default}
+.legend i{width:12px;height:3px;border-radius:2px}
+.chart{position:relative;width:100%;margin-bottom:8px}
+.chart svg{display:block;overflow:visible;max-width:100%;height:auto}
+.chart text{font-family:'Rajdhani';font-size:12px;fill:var(--muted)}
+.chart .line{transition:opacity .15s}
+.chart.hl .line{opacity:.15}
+.chart.hl .line.on{opacity:1}
+.shgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:12px;margin-bottom:22px}
+.shcard{border:1px solid var(--line);background:var(--panel-2);padding:10px 12px;min-width:0}
+.shcard.dead{opacity:.45}
+.shcard .hd{display:flex;align-items:center;gap:8px;font-weight:700}
+.shcard .hd i{width:10px;height:10px;flex:none}
+.shcard .hd b{margin-left:auto;font-family:'Orbitron';font-size:16px}
+.shcard .exp{font-size:13px;color:var(--muted);margin-top:4px;min-height:17px}
+.shcard .exp b{color:var(--text)}
+.ctip{position:fixed;z-index:130;pointer-events:none;display:none;min-width:150px;padding:8px 10px;
+  background:rgba(6,10,22,.97);border:1px solid var(--line-strong);font-size:13px;color:var(--text);box-shadow:0 6px 20px rgba(0,0,0,.5)}
+.ctip h5{margin:0 0 4px;font-family:'Orbitron';font-size:10px;letter-spacing:.15em;color:var(--muted);font-weight:500}
+.ctip div{display:grid;grid-template-columns:10px 1fr auto;gap:6px;align-items:center}
+.ctip i{width:8px;height:8px}
+.ctip .m{color:var(--muted)}
+.modal h1{margin:0;font-size:28px;font-weight:900;letter-spacing:.18em;
+  background:linear-gradient(90deg,var(--cyan),var(--magenta));-webkit-background-clip:text;background-clip:text;color:transparent}
+.modal .sub{color:var(--muted);margin:6px 0 22px;letter-spacing:.05em}
+.countpick{display:flex;gap:8px;margin-bottom:18px;flex-wrap:wrap}
+.countpick button{width:48px;height:48px;border:1px solid var(--line-strong);background:transparent;color:var(--text);font-size:18px;font-weight:700}
+.countpick button.sel{background:var(--cyan);color:#000;box-shadow:var(--glow)}
+.names{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:22px}
+.names label{display:flex;align-items:center;gap:8px;border:1px solid var(--line);padding:0 0 0 10px;background:rgba(0,0,0,.35)}
+.names label i{width:10px;height:10px;flex:none}
+.names input{flex:1;min-width:0;background:transparent;border:0;color:var(--text);font-family:'Rajdhani';font-size:16px;font-weight:600;padding:10px 8px;outline:none}
+.rank{display:flex;flex-direction:column;gap:8px;margin:18px 0 24px}
+.rank div{display:grid;grid-template-columns:36px 1fr 64px 64px;gap:10px;align-items:center;padding:10px 12px;border:1px solid var(--line)}
+.rank div:first-child{border-color:var(--lime);box-shadow:0 0 18px rgba(157,255,74,.3)}
+.rank .pos{font-family:'Orbitron';font-weight:900;color:var(--muted)}
+.rank div:first-child .pos{color:var(--lime)}
+.rank .num{text-align:right;font-family:'Orbitron';font-weight:700}
+.rank .out{grid-column:3 / 5;text-align:right;color:var(--red)}
+.rank .dead{opacity:.55}
+
+.toast{position:fixed;left:50%;bottom:26px;transform:translateX(-50%) translateY(30px);opacity:0;z-index:120;
+  padding:12px 20px;border:1px solid var(--magenta);background:rgba(10,8,24,.95);font-family:'Orbitron';font-size:12px;letter-spacing:.15em;
+  box-shadow:0 0 20px rgba(255,43,214,.4);transition:.3s;pointer-events:none;max-width:calc(100vw - 32px);text-align:center}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+
+/* ---------- Responsive ---------- */
+@media (max-width:1250px){
+  .layout{grid-template-columns:240px minmax(0,1fr)}
+  #side{grid-column:1 / -1;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:18px}
+  .actions{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
+@media (max-width:860px){
+  .top{grid-template-columns:1fr;gap:12px;padding:12px 16px}
+  .top-actions{justify-content:stretch}
+  .top-actions .btn{flex:1}
+  .layout{grid-template-columns:minmax(0,1fr);padding:16px}
+  #side{grid-template-columns:minmax(0,1fr)}
+  .plist{flex-direction:row;overflow-x:auto;padding-bottom:4px}
+  .pcard{min-width:200px}
+  .stats{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .actions{grid-template-columns:minmax(0,1fr)}
+  .names{grid-template-columns:1fr}
+}
+</style>
+</head>
+<body>
+<div class="bg-grid"></div>
+<div class="scan"></div>
+
+<header class="top">
+  <div class="brand">RAZOONIUM<small>LES DERNIERS DÔMES</small></div>
+  <div class="daybox" id="dayBox"></div>
+  <div class="weather" id="weatherBox"></div>
+  <div class="top-actions">
+    <button class="btn ghost" id="btnNew">Nouvelle partie</button>
+    <button class="btn ghost" id="btnResults">Résultats</button>
+    <button class="btn primary" id="btnNext">Tour suivant ▸</button>
+  </div>
+</header>
+
+<main class="layout">
+  <aside class="panel" id="playersPanel"></aside>
+  <section class="panel" id="console"></section>
+  <aside id="side" class="stack">
+    <div class="panel" id="lotsPanel"></div>
+    <div class="panel" id="weatherPanel"></div>
+    <div class="panel" id="logPanel"></div>
+  </aside>
+</main>
+
+<div class="modal" id="setup">
+  <div class="panel">
+    <h1>RAZOONIUM</h1>
+    <p class="sub">Survivre 15 jours. Garder le dôme allumé. Finir avec le plus de batteries.</p>
+    <div class="ptitle">Nombre de dômes</div>
+    <div class="countpick" id="countPick"></div>
+    <div class="ptitle">Commandants</div>
+    <div class="names" id="nameInputs"></div>
+    <button class="btn primary" id="btnStart" style="width:100%">Initialiser la partie</button>
+  </div>
+</div>
+
+<div class="modal" id="endModal">
+  <div class="panel wide">
+    <h1 id="endTitle">FIN DE PARTIE</h1>
+    <p class="sub" id="endSub"></p>
+    <div class="rank" id="endRank"></div>
+    <div class="ptitle">Batteries · évolution</div>
+    <div class="legend" id="batLegend"></div>
+    <div class="chart" id="batChart"></div>
+    <div class="ptitle" style="margin-top:22px">Boucliers · évolution &amp; expirations</div>
+    <div class="legend">
+      <span><svg width="14" height="14"><rect width="14" height="14" rx="2" fill="var(--cyan)"/></svg>Actif</span>
+      <span><svg width="14" height="14"><defs><pattern id="keyHatch" width="5" height="5" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="5" height="5" fill="var(--cyan)" opacity=".25"/><rect width="2.5" height="5" fill="var(--cyan)"/></pattern></defs><rect width="14" height="14" rx="2" fill="url(#keyHatch)"/></svg>Dernier jour actif</span>
+      <span><svg width="14" height="14"><rect width="14" height="14" rx="2" fill="var(--cyan)" opacity=".45"/></svg>Projection (sans nouvelle défense ni attaque)</span>
+    </div>
+    <div class="shgrid" id="shGrid"></div>
+    <div style="display:flex;gap:10px">
+      <button class="btn ghost" id="btnCloseEnd" style="flex:1">Voir le plateau</button>
+      <button class="btn primary" id="btnRestart" style="flex:1">Nouvelle partie</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+<div class="ctip" id="ctip"></div>
+
+<script>
+/* =========================================================
+   Données & constantes
+   ========================================================= */
+const COLORS = ['#00f0ff','#ff2bd6','#9dff4a','#ffb020','#8a7dff','#ff5470','#2bffc6','#f2f6ff'];
+const DEFAULT_NAMES = ['Aurora','Nyx','Helios','Vega','Orion','Lyra','Kepler','Nova'];
+const MAX_DAYS = 15;
+const START_BATTERIES = 10;
+const SHIELD_DURATION = 3;
+
+const WEATHER = {
+  calm:      { label:'Calme',     icon:'☾', color:'var(--cyan)',  desc:'Aucun effet' },
+  storm:     { label:'Tempête',   icon:'⚡', color:'var(--amber)', desc:'−1 batterie pour tous' },
+  abundance: { label:'Abondance', icon:'☀', color:'var(--lime)',  desc:'Génération ×2, Pacte ×2,5' },
+};
+
+const ACTIONS = [
+  { key:'gen',  name:'Générer',    icon:'⚛', tag:'Soi-même',   color:'#9dff4a', desc:'Dépense X → rapporte ⌊X × 1,5⌋ au tour suivant.' },
+  { key:'def',  name:'Défendre',   icon:'⬡', tag:'Soi-même',   color:'#00f0ff', desc:'Dépense X → X points de Bouclier actifs 3 tours.' },
+  { key:'atk',  name:'Attaquer',   icon:'✦', tag:'Un joueur',  color:'#ff4d6d', target:'atkTarget', desc:'Perce le Bouclier. Le surplus revient et vole autant.' },
+  { key:'pact', name:'Pacte',      icon:'∞', tag:'Un joueur',  color:'#8a7dff', target:'pact', noAmount:true, desc:'Si réciproque : Génération ×2, ni Attaque ni Défense.' },
+  { key:'xfer', name:'Transférer', icon:'⇄', tag:'Un joueur',  color:'#ffb020', target:'xferTarget', desc:'Envoie X batteries, reçues au tour suivant.' },
+  { key:'bid',  name:'Enchère',    icon:'◈', tag:'La réserve', color:'#ff2bd6', desc:'Mise secrète. Gagnant : paie. Perdant : remboursé.' },
+];
+
+/* =========================================================
+   État du jeu (en mémoire)
+   ========================================================= */
+let S = null;
+let setupCount = 6;
+
+const rand = (a,b) => a + Math.floor(Math.random()*(b-a+1));
+const emptyOrders = () => ({ gen:0, def:0, atk:0, atkTarget:null, pact:null, xfer:0, xferTarget:null, bid:0 });
+const alivePlayers = () => S.players.filter(p => p.alive);
+const spent = o => o.gen + o.def + o.atk + o.xfer + o.bid;
+const shieldTotal = p => p.shields.reduce((s,l) => s + l.amount, 0);
+const cur = () => S.players[S.current];
+
+function newGame(names){
+  S = {
+    day: 1,
+    players: names.map((n,i) => ({
+      id:i, name:n, color:COLORS[i], batteries:START_BATTERIES,
+      shields:[], alive:true, ready:false, orders:emptyOrders(), elimDay:null,
+    })),
+    lots: [],
+    lastWeather: null,
+    log: [],
+    current: 0,
+    over: false,
+    history: [],
+  };
+  S.lots = rollLots();
+  snapshot();
+  render();
+}
+
+function rollLots(){
+  const n = Math.floor(alivePlayers().length / 2);
+  return Array.from({length:n}, () => rand(2,8)).sort((a,b) => b-a);
+}
+
+/* Répartition au prorata (plus forts restes) */
+function prorata(total, weights){
+  const W = weights.reduce((a,b) => a+b, 0);
+  if (!W || !total) return weights.map(() => 0);
+  const raw = weights.map(w => total * w / W);
+  const out = raw.map(Math.floor);
+  let rest = total - out.reduce((a,b) => a+b, 0);
+  raw.map((r,i) => [r - out[i], i]).sort((a,b) => b[0]-a[0]).slice(0, rest).forEach(([,i]) => out[i]++);
+  return out;
+}
+
+/* Détruit les boucliers les plus anciens en priorité */
+function destroyShields(p, dmg){
+  for (const l of p.shields){
+    if (dmg <= 0) break;
+    const d = Math.min(l.amount, dmg);
+    l.amount -= d; dmg -= d;
+  }
+  p.shields = p.shields.filter(l => l.amount > 0);
+}
+
+/* =========================================================
+   Résolution d'un tour
+   ========================================================= */
+function resolveTurn(){
+  const day = S.day;
+  const lines = [];
+  const nm = id => `<b style="color:${S.players[id].color}">${S.players[id].name}</b>`;
+  const C = new Map();
+
+  alivePlayers().forEach(p => {
+    const o = { ...p.orders };
+    // ordres sans cible valide -> annulés
+    if (o.atk > 0 && (o.atkTarget == null || !S.players[o.atkTarget].alive)) o.atk = 0;
+    if (o.xfer > 0 && (o.xferTarget == null || !S.players[o.xferTarget].alive)) o.xfer = 0;
+    C.set(p.id, { p, o, before:p.batteries, reserve:p.batteries - spent(o), gains:0, pact:false });
+  });
+
+  // 1. Coût de vie
+  C.forEach(c => c.reserve -= 1);
+  lines.push('Coût de vie : −1 🔋 par dôme.');
+
+  // 2. Météo
+  const die = rand(1,6);
+  const weather = die <= 2 ? 'calm' : die <= 4 ? 'storm' : 'abundance';
+  if (weather === 'storm'){ C.forEach(c => c.reserve -= 1); }
+  const genMult  = weather === 'abundance' ? 2 : 1.5;
+  const pactMult = weather === 'abundance' ? 2.5 : 2;
+  lines.push(`Météo (dé ${die}) : <b style="color:${WEATHER[weather].color}">${WEATHER[weather].label}</b> — ${WEATHER[weather].desc}.`);
+
+  // 3. Enchères
+  const bidders = [...C.values()].filter(c => c.o.bid > 0)
+    .sort((a,b) => b.o.bid - a.o.bid || a.p.batteries - b.p.batteries);
+  if (!bidders.length && S.lots.length) lines.push('Enchères : aucune mise, les lots restent en réserve.');
+  bidders.forEach((c,i) => {
+    if (i < S.lots.length){
+      c.reserve += S.lots[i];
+      lines.push(`Enchère : ${nm(c.p.id)} remporte le lot n°${i+1} (+${S.lots[i]}) pour une mise de ${c.o.bid}.`);
+    } else {
+      c.reserve += c.o.bid;
+      lines.push(`Enchère : ${nm(c.p.id)} perd (mise de ${c.o.bid} remboursée).`);
+    }
+  });
+
+  // 4. Pactes
+  C.forEach(c => {
+    const t = c.o.pact;
+    if (t != null && C.has(t) && C.get(t).o.pact === c.p.id) c.pact = true;
+  });
+  C.forEach(c => {
+    if (!c.pact) return;
+    const refund = c.o.atk + c.o.def;
+    c.reserve += refund; c.o.atk = 0; c.o.def = 0;
+    if (c.p.id < c.o.pact) lines.push(`Pacte scellé entre ${nm(c.p.id)} et ${nm(c.o.pact)} — boucliers désactivés ce tour.`);
+    if (refund) lines.push(`${nm(c.p.id)} : ${refund} batterie(s) d'attaque/défense annulée(s) par le pacte.`);
+  });
+  C.forEach(c => {
+    if (c.o.pact != null && !c.pact) lines.push(`${nm(c.p.id)} a tendu la main à ${nm(c.o.pact)}… sans retour.`);
+  });
+
+  // Nouveaux boucliers (actifs dès ce tour)
+  C.forEach(c => { if (c.o.def > 0) c.p.shields.push({ amount:c.o.def, day }); });
+
+  // 5. Attaques
+  const byTarget = new Map();
+  C.forEach(c => {
+    if (c.o.atk > 0){
+      if (!byTarget.has(c.o.atkTarget)) byTarget.set(c.o.atkTarget, []);
+      byTarget.get(c.o.atkTarget).push(c);
+    }
+  });
+  byTarget.forEach((atks, tid) => {
+    const tc = C.get(tid);
+    const A = atks.reduce((s,a) => s + a.o.atk, 0);
+    const shield = tc.pact ? 0 : shieldTotal(tc.p);
+    const absorbed = Math.min(A, shield);
+    if (!tc.pact) destroyShields(tc.p, absorbed);
+    const net = A - absorbed;
+    const netShares = prorata(net, atks.map(a => a.o.atk));
+    const steal = Math.min(net, Math.max(0, tc.reserve));
+    tc.reserve -= steal;
+    const stealShares = prorata(steal, netShares);
+    atks.forEach((a,i) => { a.gains += netShares[i] + stealShares[i]; });
+    const who = atks.map(a => `${nm(a.p.id)} (${a.o.atk})`).join(' + ');
+    lines.push(`Attaque sur ${nm(tid)} par ${who} : ${absorbed} absorbé(s) par le bouclier, ${net} net, ${steal} volée(s).`);
+  });
+
+  // 6. Expiration des boucliers (actifs 3 tours : jour J, J+1, J+2)
+  C.forEach(c => { c.p.shields = c.p.shields.filter(l => l.amount > 0 && day - l.day < SHIELD_DURATION - 1); });
+
+  // 7. Récoltes & réceptions
+  C.forEach(c => {
+    if (c.o.gen > 0){
+      const y = Math.floor(c.o.gen * (c.pact ? pactMult : genMult));
+      c.gains += y;
+      lines.push(`${nm(c.p.id)} génère ${y} 🔋 (${c.o.gen} × ${c.pact ? pactMult : genMult}).`);
+    }
+    if (c.o.xfer > 0){
+      C.get(c.o.xferTarget).gains += c.o.xfer;
+      lines.push(`${nm(c.p.id)} transfère ${c.o.xfer} 🔋 à ${nm(c.o.xferTarget)}.`);
+    }
+  });
+
+  const bilan = [];
+  C.forEach(c => {
+    c.p.batteries = c.reserve + c.gains;
+    if (c.p.batteries <= 0){
+      c.p.batteries = 0; c.p.alive = false; c.p.shields = []; c.p.elimDay = day;
+      lines.push(`☠ Le dôme de ${nm(c.p.id)} s'éteint.`);
+    }
+    bilan.push({ id:c.p.id, before:c.before, after:c.p.batteries });
+  });
+
+  S.log.unshift({ day, weather, die, lines, bilan });
+  S.lastWeather = { weather, die };
+
+  // Fin de tour
+  S.players.forEach(p => { p.orders = emptyOrders(); p.ready = false; });
+  S.day++;
+  snapshot();
+  const alive = alivePlayers();
+  if (alive.length <= 1 || S.day > MAX_DAYS){
+    S.over = true;
+    S.lots = [];
+  } else {
+    S.lots = rollLots();
+    if (!cur().alive) S.current = alive[0].id;
+  }
+  render();
+  toast(`Jour ${day} résolu — ${WEATHER[weather].icon} ${WEATHER[weather].label}`);
+  if (S.over) showEnd();
+}
+
+/* =========================================================
+   Rendu
+   ========================================================= */
+function render(){
+  renderTop();
+  renderPlayers();
+  renderConsole();
+  renderLots();
+  renderWeatherInfo();
+  renderLog();
+}
+
+function renderTop(){
+  const d = Math.min(S.day, MAX_DAYS);
+  const cells = Array.from({length:MAX_DAYS}, (_,i) =>
+    `<i class="${i+1 < S.day ? 'done' : (i+1 === S.day && !S.over ? 'now' : '')}"></i>`).join('');
+  document.getElementById('dayBox').innerHTML =
+    `<div class="num">JOUR <b>${String(S.over ? MAX_DAYS : d).padStart(2,'0')}</b> / ${MAX_DAYS}</div><div class="progress">${cells}</div>`;
+  const w = S.lastWeather;
+  document.getElementById('weatherBox').innerHTML = w
+    ? `<span class="ico" style="color:${WEATHER[w.weather].color}">${WEATHER[w.weather].icon}</span>
+       <div><div class="lbl">MÉTÉO J${S.day-1} · DÉ ${w.die}</div><div class="val" style="color:${WEATHER[w.weather].color}">${WEATHER[w.weather].label}</div></div>`
+    : `<span class="ico" style="color:var(--muted)">?</span><div><div class="lbl">MÉTÉO</div><div class="val">Tirée à la résolution</div></div>`;
+  document.getElementById('btnNext').disabled = S.over;
+}
+
+function renderPlayers(){
+  const alive = alivePlayers();
+  const ready = alive.filter(p => p.ready).length;
+  const html = S.players.map(p => {
+    const st = !p.alive ? '<span class="status out">ÉTEINT</span>'
+      : p.ready ? '<span class="status ready">PRÊT</span>' : '<span class="status wait">ORDRES</span>';
+    return `<button class="pcard ${p.id===S.current?'active':''} ${p.alive?'':'dead'}" style="--c:${p.color}" data-pick="${p.id}">
+      <span class="bar"></span>
+      <span><div class="nm">${esc(p.name)}</div>
+      <div class="meta"><span>🔋 <b>${p.batteries}</b></span><span>🛡 <b>${shieldTotal(p)}</b></span></div></span>
+      ${st}</button>`;
+  }).join('');
+  document.getElementById('playersPanel').innerHTML =
+    `<div class="ptitle">Dômes <span class="tag">${alive.length}/${S.players.length}</span></div>
+     <div class="plist">${html}</div>
+     <div class="readycount">Ordres validés : <b>${ready}</b> / ${alive.length}</div>`;
+}
+
+function renderConsole(){
+  const p = cur();
+  const o = p.orders;
+  const used = spent(o);
+  const remaining = p.batteries - used;
+  const others = S.players.filter(x => x.alive && x.id !== p.id);
+  const editable = p.alive && !S.over && !p.ready;
+
+  const cells = Array.from({length:Math.max(p.batteries, 1)}, (_,i) =>
+    `<i class="${i < remaining ? 'on' : i < p.batteries ? 'lock' : ''}"></i>`).join('');
+  const layers = p.shields.length
+    ? p.shields.map(l => {
+        const left = SHIELD_DURATION - (S.day - l.day);
+        return `<span class="layer ${left<=1?'old':''}">${l.amount} · ${left}t</span>`;
+      }).join('')
+    : '<span class="empty">aucun</span>';
+
+  let body;
+  if (!p.alive){
+    body = `<div class="locked-msg">DÔME ÉTEINT — JOUR ${p.elimDay}</div>`;
+  } else if (S.over){
+    body = `<div class="locked-msg" style="border-color:var(--cyan);color:var(--cyan)">PARTIE TERMINÉE</div>`;
+  } else {
+    const cards = ACTIONS.map(a => {
+      const val = a.noAmount ? null : o[a.key];
+      const tKey = a.target;
+      const on = a.noAmount ? o.pact != null : val > 0;
+      const sel = tKey ? `<select data-target="${tKey}" ${editable?'':'disabled'}>
+          <option value="">— Cible —</option>
+          ${others.map(x => `<option value="${x.id}" ${o[tKey]===x.id?'selected':''}>${esc(x.name)} · 🔋${x.batteries} 🛡${shieldTotal(x)}</option>`).join('')}
+        </select>` : '';
+      const step = a.noAmount ? '' : `<div class="stepper">
+          <button data-step="${a.key}" data-d="-1" ${editable && val>0?'':'disabled'}>−</button>
+          <div class="val">${val}</div>
+          <button data-step="${a.key}" data-d="1" ${editable && remaining>0?'':'disabled'}>+</button>
+        </div>`;
+      return `<div class="acard ${on?'on':''}" style="--a:${a.color}">
+        <div class="hd"><div class="ic"><span>${a.icon}</span></div>
+          <div><div class="nm">${a.name}</div><div class="tg">${a.tag}</div></div></div>
+        <div class="ds">${a.desc}</div>
+        ${step}${sel}
+        <div class="pv">${preview(a.key, p)}</div>
+      </div>`;
+    }).join('');
+
+    body = `<div class="actions">${cards}</div>
+      <div class="cfoot">
+        <span class="hint">Shift + clic : ±5 · ← → : changer de joueur</span>
+        <div style="display:flex;gap:10px;flex-wrap:wrap">
+          ${p.ready
+            ? `<button class="btn ghost" data-cmd="unready">Modifier les ordres</button>`
+            : `<button class="btn ghost" data-cmd="reset">Réinitialiser</button>
+               <button class="btn primary" data-cmd="ready">Valider &amp; suivant ▸</button>`}
+        </div>
+      </div>`;
+  }
+
+  document.getElementById('console').innerHTML = `
+    <div class="chead" style="--c:${p.color}">
+      <div class="avatar">${esc(p.name[0]||'?').toUpperCase()}</div>
+      <div class="who"><div class="lbl">COMMANDANT ${String(p.id+1).padStart(2,'0')} · ${p.ready ? 'ORDRES VERROUILLÉS' : 'TERMINAL ACTIF'}</div><h2>${esc(p.name)}</h2></div>
+      <div class="navbtns">
+        <button class="btn ghost" data-cmd="prev">◂ Préc.</button>
+        <button class="btn ghost" data-cmd="next">Suiv. ▸</button>
+      </div>
+    </div>
+    <div class="stats">
+      <div class="stat"><div class="k">Batteries</div><div class="v lime">${p.batteries}</div><div class="cells">${cells}</div></div>
+      <div class="stat"><div class="k">Engagées</div><div class="v mag">${used}</div><div class="s">dans les ordres du jour</div></div>
+      <div class="stat"><div class="k">Bouclier</div><div class="v cyan">${shieldTotal(p)}</div><div class="layers">${layers}</div></div>
+    </div>
+    ${body}`;
+}
+
+function preview(key, p){
+  const o = p.orders;
+  const nm = id => id == null ? '' : esc(S.players[id].name);
+  switch(key){
+    case 'gen':  return o.gen ? `→ +${Math.floor(o.gen*1.5)} (×1,5) · +${o.gen*2} si Abondance/Pacte` : '';
+    case 'def':  return o.def ? `→ Bouclier ${shieldTotal(p)} → ${shieldTotal(p)+o.def}` : '';
+    case 'atk':
+      if (!o.atk) return '';
+      if (o.atkTarget == null) return '⚠ choisis une cible';
+      return `→ ${nm(o.atkTarget)} · bouclier visible ${shieldTotal(S.players[o.atkTarget])}`;
+    case 'pact':
+      if (o.pact == null) return '';
+      return o.atk || o.def ? '⚠ attaque/défense annulées si réciproque' : `→ en attente de ${nm(o.pact)}`;
+    case 'xfer':
+      if (!o.xfer) return '';
+      return o.xferTarget == null ? '⚠ choisis une cible' : `→ ${o.xfer} pour ${nm(o.xferTarget)}`;
+    case 'bid':  return o.bid ? `→ mise de ${o.bid} sur ${S.lots.length} lot(s)` : '';
+  }
+  return '';
+}
+
+function renderLots(){
+  const lots = S.lots.length
+    ? S.lots.map((v,i) => `<div class="lot"><span class="rk">LOT ${String(i+1).padStart(2,'0')}</span><span class="amt">+${v} 🔋</span></div>`).join('')
+    : '<div class="empty">Aucun lot disponible.</div>';
+  document.getElementById('lotsPanel').innerHTML =
+    `<div class="ptitle">Enchère du jour <span class="tag">${S.lots.length} lot(s)</span></div><div class="lots">${lots}</div>`;
+}
+
+function renderWeatherInfo(){
+  document.getElementById('weatherPanel').innerHTML = `<div class="ptitle">Météo · D6</div>
+    <div class="wtable">
+      <div><span class="d">1-2</span><b style="color:var(--cyan)">☾ Calme</b><span>Aucun effet</span></div>
+      <div><span class="d">3-4</span><b style="color:var(--amber)">⚡ Tempête</b><span>−1 🔋 pour tous</span></div>
+      <div><span class="d">5-6</span><b style="color:var(--lime)">☀ Abondance</b><span>Gén. ×2 · Pacte ×2,5</span></div>
+    </div>`;
+}
+
+function renderLog(){
+  const entries = S.log.length ? S.log.map(e => `
+    <div class="entry" style="border-color:${WEATHER[e.weather].color}">
+      <h4>JOUR ${String(e.day).padStart(2,'0')} <span>${WEATHER[e.weather].icon} ${WEATHER[e.weather].label}</span></h4>
+      <ul>${e.lines.map(l => `<li>${l}</li>`).join('')}</ul>
+      <div class="bilan">${e.bilan.map(b => {
+        const d = b.after - b.before;
+        return `<span style="color:${S.players[b.id].color}">${esc(S.players[b.id].name)}</span>
+                <span class="${d>0?'up':d<0?'down':''}">${b.before} → ${b.after} (${d>=0?'+':''}${d})</span>`;
+      }).join('')}</div>
+    </div>`).join('') : '<div class="empty">Aucun tour résolu pour l\'instant.</div>';
+  document.getElementById('logPanel').innerHTML = `<div class="ptitle">Journal de bord</div><div class="log">${entries}</div>`;
+}
+
+function showEnd(){
+  const ranked = [...S.players].sort((a,b) => (b.alive - a.alive) || b.batteries - a.batteries || shieldTotal(b) - shieldTotal(a) || (b.elimDay||0) - (a.elimDay||0));
+  const alive = alivePlayers();
+  const win = ranked[0];
+  document.getElementById('endTitle').textContent = S.over ? 'FIN DE PARTIE' : 'RÉSULTATS';
+  document.getElementById('endSub').innerHTML = !S.over
+    ? `Classement provisoire — jour ${S.day} / ${MAX_DAYS}.`
+    : alive.length === 0
+      ? 'Tous les dômes se sont éteints.'
+      : alive.length === 1 && S.day <= MAX_DAYS
+        ? `${esc(win.name)} est le dernier dôme debout.`
+        : `15 jours écoulés. ${esc(win.name)} l'emporte avec ${win.batteries} batteries.`;
+  document.getElementById('endRank').innerHTML = ranked.map((p,i) => `
+    <div class="${p.alive?'':'dead'}"><span class="pos">#${i+1}</span><span style="color:${p.color};font-weight:700">${esc(p.name)}</span>
+    ${p.alive
+      ? `<span class="num">🔋 ${p.batteries}</span><span class="num">🛡 ${shieldTotal(p)}</span>`
+      : `<span class="out">☠ jour ${p.elimDay}</span>`}</div>`).join('');
+  document.getElementById('btnCloseEnd').textContent = S.over ? 'Voir le plateau' : 'Fermer';
+  document.getElementById('btnRestart').style.display = S.over ? '' : 'none';
+  document.getElementById('endModal').classList.add('open');
+  renderCharts();
+}
+
+/* =========================================================
+   Graphiques (historique : état au début de chaque jour)
+   ========================================================= */
+function snapshot(){
+  S.history.push({ day:S.day, players:S.players.map(p => ({
+    b:p.batteries, alive:p.alive, shields:p.shields.map(l => ({ ...l })),
+  })) });
+}
+
+const N_DAYS = MAX_DAYS + 1;            // J1 … J15 + « Fin »
+const dayLbl = k => k > MAX_DAYS ? 'Fin' : `J${k}`;
+const lastActive = l => l.day + SHIELD_DURATION - 1;
+
+function niceScale(v){
+  for (const s of [1,2,5,10,20,25,50,100,200]) if (Math.ceil(v/s) <= 5) return { max:Math.max(s, Math.ceil(v/s)*s), step:s };
+  return { max:v, step:v };
+}
+
+function tip(e, html){
+  const t = document.getElementById('ctip');
+  if (!html){ t.style.display = 'none'; return; }
+  t.innerHTML = html; t.style.display = 'block';
+  const r = t.getBoundingClientRect();
+  let x = e.clientX + 14, y = e.clientY + 14;
+  if (x + r.width > innerWidth - 8) x = e.clientX - r.width - 14;
+  if (y + r.height > innerHeight - 8) y = e.clientY - r.height - 14;
+  t.style.left = x + 'px'; t.style.top = y + 'px';
+}
+const sw = c => `<i style="background:${c}"></i>`;
+
+function renderCharts(){
+  renderBatteryChart();
+  renderShieldCharts();
+}
+
+function renderBatteryChart(){
+  const el = document.getElementById('batChart');
+  const H = 240, m = { l:30, r:14, t:10, b:24 };
+  const W = el.clientWidth || 600;
+  const hist = S.history;
+  const { max, step } = niceScale(Math.max(...hist.flatMap(h => h.players.map(p => p.b)), 1));
+  const x = k => m.l + (k-1) / (N_DAYS-1) * (W - m.l - m.r);
+  const y = v => m.t + (1 - v/max) * (H - m.t - m.b);
+  const every = W < 520 ? 3 : 1;
+
+  let svg = '';
+  for (let v = 0; v <= max; v += step)
+    svg += `<line x1="${m.l}" x2="${W-m.r}" y1="${y(v)}" y2="${y(v)}" stroke="rgba(123,147,173,.18)"/>
+            <text x="${m.l-6}" y="${y(v)+4}" text-anchor="end">${v}</text>`;
+  for (let k = 1; k <= N_DAYS; k++)
+    if ((k-1) % every === 0 || k === N_DAYS)
+      svg += `<text x="${x(k)}" y="${H-6}" text-anchor="middle">${dayLbl(k)}</text>`;
+
+  S.players.forEach(p => {
+    // on garde les points tant que le dôme était allumé au relevé précédent (inclut la chute à 0)
+    const pts = hist.filter((h,i) => i === 0 || hist[i-1].players[p.id].alive).map(h => [x(h.day), y(h.players[p.id].b)]);
+    const [lx, ly] = pts[pts.length-1];
+    svg += `<g class="line" data-pid="${p.id}">
+      <polyline points="${pts.map(q => q.join(',')).join(' ')}" fill="none" stroke="${p.color}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+      <circle cx="${lx}" cy="${ly}" r="4" fill="${p.color}" stroke="#0a1226" stroke-width="2"/></g>`;
+  });
+  svg += `<line id="batCross" y1="${m.t}" y2="${H-m.b}" stroke="rgba(217,243,255,.35)" visibility="hidden"/>
+          <rect x="${m.l}" y="0" width="${W-m.l-m.r}" height="${H}" fill="transparent" id="batHit"/>`;
+  el.innerHTML = `<svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">${svg}</svg>`;
+
+  const legend = document.getElementById('batLegend');
+  legend.innerHTML = S.players.map(p => `<button data-hl="${p.id}"><i style="background:${p.color}"></i>${esc(p.name)}</button>`).join('');
+  const highlight = id => {
+    el.classList.toggle('hl', id != null);
+    el.querySelectorAll('.line').forEach(g => g.classList.toggle('on', +g.dataset.pid === id));
+  };
+  legend.onpointerover = e => { const b = e.target.closest('[data-hl]'); highlight(b ? +b.dataset.hl : null); };
+  legend.onpointerleave = () => highlight(null);
+
+  const hit = el.querySelector('#batHit'), cross = el.querySelector('#batCross');
+  hit.onpointermove = e => {
+    const r = el.getBoundingClientRect(), px = (e.clientX - r.left) * W / r.width;
+    const k = Math.min(hist.length, Math.max(1, Math.round((px - m.l) / (W - m.l - m.r) * (N_DAYS-1)) + 1));
+    const h = hist[k-1];
+    cross.setAttribute('x1', x(k)); cross.setAttribute('x2', x(k)); cross.setAttribute('visibility', 'visible');
+    const rows = S.players.filter((p,i) => k === 1 || hist[k-2].players[i].alive)
+      .sort((a,b) => h.players[b.id].b - h.players[a.id].b)
+      .map(p => `<div>${sw(p.color)}<span>${esc(p.name)}</span><b>${h.players[p.id].alive ? '🔋 '+h.players[p.id].b : '☠'}</b></div>`).join('');
+    tip(e, `<h5>${k > MAX_DAYS ? 'FIN DE PARTIE' : 'DÉBUT DU ' + dayLbl(k)}</h5>${rows}`);
+  };
+  hit.onpointerleave = e => { cross.setAttribute('visibility', 'hidden'); tip(e, null); };
+}
+
+function renderShieldCharts(){
+  const grid = document.getElementById('shGrid');
+  const hist = S.history;
+  const now = hist[hist.length-1].day;
+  const projDays = S.over ? 0 : SHIELD_DURATION - 1;
+
+  // couches présentes au début du jour k (réelles jusqu'à aujourd'hui, projetées ensuite)
+  const layersAt = (p, k) => k <= now
+    ? hist[k-1].players[p.id].shields
+    : (p.alive && k <= now + projDays ? p.shields.filter(l => lastActive(l) >= k) : []);
+  const total = ls => ls.reduce((s,l) => s + l.amount, 0);
+
+  let peak = 4;
+  S.players.forEach(p => { for (let k = 1; k <= N_DAYS; k++) peak = Math.max(peak, total(layersAt(p, k))); });
+  const { max } = niceScale(peak);
+
+  grid.innerHTML = S.players.map(p => {
+    const byDay = new Map();
+    p.shields.forEach(l => byDay.set(lastActive(l), (byDay.get(lastActive(l)) || 0) + l.amount));
+    const exp = !p.alive ? `Éteint au jour ${p.elimDay}`
+      : byDay.size ? 'Expire : ' + [...byDay].sort((a,b) => a[0]-b[0]).map(([d,v]) => `<b>${v}</b> après ${dayLbl(d)}`).join(' · ')
+      : 'Aucun bouclier actif';
+    return `<div class="shcard ${p.alive?'':'dead'}">
+      <div class="hd"><i style="background:${p.color}"></i>${esc(p.name)}<b>🛡 ${shieldTotal(p)}</b></div>
+      <div class="chart" data-sh="${p.id}"></div>
+      <div class="exp">${exp}</div></div>`;
+  }).join('');
+
+  grid.querySelectorAll('[data-sh]').forEach(el => {
+    const p = S.players[+el.dataset.sh];
+    const H = 104, m = { l:20, r:4, t:6, b:18 };
+    const W = el.clientWidth || 220;
+    const band = (W - m.l - m.r) / N_DAYS;
+    const bw = Math.max(4, band * 0.62);
+    const y = v => m.t + (1 - v/max) * (H - m.t - m.b);
+    const hatch = `hatch${p.id}`;
+
+    let svg = `<defs><pattern id="${hatch}" width="5" height="5" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+      <rect width="5" height="5" fill="${p.color}" opacity=".25"/><rect width="2.5" height="5" fill="${p.color}"/></pattern></defs>`;
+    if (!S.over && p.alive) svg += `<rect x="${m.l + (now-1)*band}" y="${m.t}" width="${band}" height="${H-m.t-m.b}" fill="rgba(0,240,255,.07)"/>`;
+    svg += `<line x1="${m.l}" x2="${W-m.r}" y1="${y(0)}" y2="${y(0)}" stroke="rgba(123,147,173,.3)"/>
+            <text x="${m.l-4}" y="${y(max)+8}" text-anchor="end">${max}</text>
+            <text x="${m.l-4}" y="${y(0)+3}" text-anchor="end">0</text>`;
+    [1,5,10,15].forEach(k => svg += `<text x="${m.l + (k-.5)*band}" y="${H-4}" text-anchor="middle">${dayLbl(k)}</text>`);
+
+    for (let k = 1; k <= N_DAYS; k++){
+      const proj = k > now;
+      let acc = 0;
+      layersAt(p, k).forEach(l => {            // plus anciennes en bas (détruites en premier)
+        const y0 = y(acc), y1 = y(acc + l.amount);
+        acc += l.amount;
+        const last = lastActive(l) === k;
+        svg += `<rect x="${m.l + (k-.5)*band - bw/2}" y="${y1}" width="${bw}" height="${Math.max(1, y0 - y1 - 2)}" rx="2"
+          fill="${last ? `url(#${hatch})` : p.color}" opacity="${proj ? .45 : 1}"/>`;
+      });
+      svg += `<rect x="${m.l + (k-1)*band}" y="0" width="${band}" height="${H}" fill="transparent" data-k="${k}"/>`;
+    }
+    el.innerHTML = `<svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">${svg}</svg>`;
+
+    el.onpointermove = e => {
+      const r = e.target.closest('[data-k]');
+      if (!r) return tip(e, null);
+      const k = +r.dataset.k, ls = layersAt(p, k);
+      const head = `${k > MAX_DAYS ? 'FIN DE PARTIE' : 'DÉBUT DU ' + dayLbl(k)}${k > now ? ' · PROJECTION' : k === now && !S.over ? ' · AUJOURD\'HUI' : ''}`;
+      const rows = ls.length
+        ? ls.map(l => `<div>${sw(p.color)}<span>🛡 ${l.amount} <span class="m">posé ${dayLbl(l.day)}</span></span>
+            <b>${lastActive(l) === k ? 'dernier jour' : 'jusqu\'à ' + dayLbl(lastActive(l))}</b></div>`).join('')
+        : '<span class="m">Aucun bouclier</span>';
+      tip(e, `<h5>${head}</h5>${rows}${ls.length > 1 ? `<div><span></span><span class="m">Total</span><b>🛡 ${total(ls)}</b></div>` : ''}`);
+    };
+    el.onpointerleave = e => tip(e, null);
+  });
+}
+
+addEventListener('resize', () => {
+  if (document.getElementById('endModal').classList.contains('open')) renderCharts();
+});
+
+/* =========================================================
+   Interactions
+   ========================================================= */
+function esc(s){ return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+
+let toastTimer;
+function toast(msg){
+  const t = document.getElementById('toast');
+  t.innerHTML = msg; t.classList.add('show');
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove('show'), 2400);
+}
+
+function switchPlayer(dir){
+  const n = S.players.length;
+  S.current = (S.current + dir + n) % n;
+  render();
+}
+
+function nextPending(){
+  const n = S.players.length;
+  for (let k = 1; k <= n; k++){
+    const p = S.players[(S.current + k) % n];
+    if (p.alive && !p.ready) { S.current = p.id; return; }
+  }
+}
+
+document.addEventListener('click', e => {
+  const pick = e.target.closest('[data-pick]');
+  if (pick){ S.current = +pick.dataset.pick; render(); return; }
+
+  const step = e.target.closest('[data-step]');
+  if (step){
+    const p = cur(), key = step.dataset.step;
+    const d = (+step.dataset.d) * (e.shiftKey ? 5 : 1);
+    const remaining = p.batteries - spent(p.orders);
+    p.orders[key] = Math.max(0, p.orders[key] + Math.min(d, remaining));
+    render(); return;
+  }
+
+  const cmd = e.target.closest('[data-cmd]');
+  if (cmd){
+    const p = cur();
+    switch(cmd.dataset.cmd){
+      case 'prev': switchPlayer(-1); break;
+      case 'next': switchPlayer(1); break;
+      case 'reset': p.orders = emptyOrders(); render(); break;
+      case 'unready': p.ready = false; render(); break;
+      case 'ready': {
+        const o = p.orders;
+        if (o.atk > 0 && o.atkTarget == null) return toast('⚠ Attaque sans cible');
+        if (o.xfer > 0 && o.xferTarget == null) return toast('⚠ Transfert sans cible');
+        p.ready = true;
+        const allReady = alivePlayers().every(x => x.ready);
+        if (!allReady) nextPending();
+        render();
+        toast(allReady ? 'Tous les ordres sont validés — lance le tour suivant' : `Ordres de ${esc(p.name)} verrouillés`);
+        break;
+      }
+    }
+  }
+});
+
+document.addEventListener('change', e => {
+  const sel = e.target.closest('[data-target]');
+  if (!sel) return;
+  cur().orders[sel.dataset.target] = sel.value === '' ? null : +sel.value;
+  render();
+});
+
+document.addEventListener('keydown', e => {
+  if (!S || document.querySelector('.modal.open')) return;
+  if (['INPUT','SELECT'].includes(document.activeElement.tagName)) return;
+  if (e.key === 'ArrowLeft') switchPlayer(-1);
+  if (e.key === 'ArrowRight') switchPlayer(1);
+});
+
+document.getElementById('btnNext').addEventListener('click', () => {
+  if (S.over) return;
+  const pending = alivePlayers().filter(p => !p.ready);
+  if (pending.length && !confirm(`${pending.length} joueur(s) n'ont pas validé leurs ordres. Résoudre quand même ?`)) return;
+  resolveTurn();
+});
+
+/* ---------- Setup ---------- */
+function renderSetup(){
+  document.getElementById('countPick').innerHTML = [4,5,6,7,8].map(n =>
+    `<button class="${n===setupCount?'sel':''}" data-count="${n}">${n}</button>`).join('');
+  const prev = [...document.querySelectorAll('#nameInputs input')].map(i => i.value);
+  document.getElementById('nameInputs').innerHTML = Array.from({length:setupCount}, (_,i) =>
+    `<label><i style="background:${COLORS[i]};box-shadow:0 0 8px ${COLORS[i]}"></i>
+     <input value="${esc(prev[i] ?? DEFAULT_NAMES[i])}" maxlength="16"></label>`).join('');
+}
+document.getElementById('countPick').addEventListener('click', e => {
+  const b = e.target.closest('[data-count]');
+  if (b){ setupCount = +b.dataset.count; renderSetup(); }
+});
+document.getElementById('btnStart').addEventListener('click', () => {
+  const names = [...document.querySelectorAll('#nameInputs input')].map((i,k) => i.value.trim() || DEFAULT_NAMES[k]);
+  document.getElementById('setup').classList.remove('open');
+  newGame(names);
+});
+function openSetup(){ renderSetup(); document.getElementById('setup').classList.add('open'); }
+document.getElementById('btnNew').addEventListener('click', () => {
+  if (S && !S.over && !confirm('Abandonner la partie en cours ?')) return;
+  openSetup();
+});
+document.getElementById('btnRestart').addEventListener('click', () => {
+  document.getElementById('endModal').classList.remove('open'); openSetup();
+});
+document.getElementById('btnResults').addEventListener('click', showEnd);
+document.getElementById('btnCloseEnd').addEventListener('click', () => {
+  document.getElementById('endModal').classList.remove('open');
+  document.getElementById('ctip').style.display = 'none';
+});
+
+// Démarrage : partie par défaut en fond + écran de configuration
+newGame(DEFAULT_NAMES.slice(0, setupCount));
+openSetup();
+</script>
+</body>
+</html>

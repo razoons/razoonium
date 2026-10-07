@@ -1,49 +1,47 @@
 <template>
   <v-app>
-    <v-navigation-drawer v-model="drawer" temporary>
-      <v-list-item
-        title="Mon App"
-        subtitle="Gestion d'inventaire"
-        prepend-icon="mdi-warehouse"
-        nav
-      />
-      <v-divider />
-      <v-list density="compact" nav>
-        <v-list-item
-          v-for="item in navItems"
-          :key="item.to"
-          :prepend-icon="item.icon"
-          :title="item.title"
-          :to="item.to"
-          rounded="lg"
-        />
-      </v-list>
-    </v-navigation-drawer>
+    <div class="bg-grid" />
+    <div class="scan" />
 
-    <v-app-bar color="primary" flat>
-      <v-app-bar-nav-icon @click="drawer = !drawer" />
-      <v-app-bar-title>{{ currentTitle }}</v-app-bar-title>
-    </v-app-bar>
+    <header class="top">
+      <div class="top-row">
+        <router-link to="/" class="brand">RAZOONIUM<small>LES DERNIERS DÔMES</small></router-link>
+        <div class="spacer" />
+        <span v-if="auth.user" class="who">Commandant <b>{{ auth.user.username }}</b></span>
+        <div class="top-actions">
+          <router-link to="/rules" class="btn ghost icon" title="Règles">
+            <v-icon size="18">mdi-book-open-variant</v-icon>
+          </router-link>
+          <button v-if="auth.user" class="btn ghost icon" title="Déconnexion" @click="logout">
+            <v-icon size="18">mdi-logout-variant</v-icon>
+          </button>
+        </div>
+      </div>
+      <!-- Sous-menu injecté par les pages (ex. onglets d'une partie) -->
+      <div id="subnav" />
+    </header>
 
     <v-main>
       <router-view />
     </v-main>
+
+    <v-snackbar v-model="toastState.show" :timeout="2600" location="bottom">
+      {{ toastState.text }}
+    </v-snackbar>
+
+    <v-snackbar v-model="needRefresh" :timeout="-1" location="top">
+      Nouvelle version disponible
+      <template #actions>
+        <button class="btn primary" @click="updateServiceWorker()">Mettre à jour</button>
+      </template>
+    </v-snackbar>
   </v-app>
 </template>
 
 <script setup>
-import { ref, computed } from 'vue';
-import { useRoute } from 'vue-router';
+import { useRegisterSW } from 'virtual:pwa-register/vue';
+import { auth, logout } from './stores/auth';
+import { toastState } from './stores/toast';
 
-const drawer = ref(false);
-const route = useRoute();
-
-const navItems = [
-  { title: 'Accueil', icon: 'mdi-home', to: '/' },
-  { title: 'Inventaire', icon: 'mdi-package-variant', to: '/inventory' },
-];
-
-const currentTitle = computed(
-  () => navItems.find((i) => i.to === route.path)?.title ?? 'Mon App'
-);
+const { needRefresh, updateServiceWorker } = useRegisterSW();
 </script>

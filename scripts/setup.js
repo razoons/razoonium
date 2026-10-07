@@ -24,13 +24,31 @@ const rl = readline.createInterface({ input: process.stdin, output: process.stdo
 const ask = (q) => new Promise((res) => rl.question(q, res));
 
 function run(cmd, opts = {}) {
+  const { ignoreError, retries = 0, ...execOpts } = opts;
   c.info(`$ ${cmd}`);
-  try {
-    execSync(cmd, { stdio: 'inherit', ...opts });
-  } catch (e) {
-    if (opts.ignoreError) { c.warn(`Erreur ignorée : ${cmd}`); return; }
-    c.error(`Commande échouée : ${cmd}`);
+  for (let attempt = 0; ; attempt++) {
+    try {
+      execSync(cmd, { stdio: 'inherit', ...execOpts });
+      return;
+    } catch (e) {
+      if (attempt < retries) {
+        const delay = 2 ** attempt * 2;
+        c.warn(`Échec, nouvelle tentative dans ${delay}s (${attempt + 1}/${retries})...`);
+        execSync(`node -e "setTimeout(() => {}, ${delay * 1000})"`);
+        continue;
+      }
+      if (ignoreError) { c.warn(`Erreur ignorée : ${cmd}`); return; }
+      c.error(`Commande échouée : ${cmd}`);
+    }
   }
+}
+
+// Les modifications IAM concurrentes (ex. création des comptes de service à l'activation des APIs) échouent par conflit d'ETag
+function addProjectRole(projectId, member, role) {
+  run(
+    `gcloud projects add-iam-policy-binding ${projectId} --member=${member} --role=${role} --condition=None --quiet`,
+    { retries: 5 }
+  );
 }
 
 function replaceInFile(file, replacements) {
@@ -58,8 +76,14 @@ function setupGcpProject(projectId, serviceName, region, label) {
   run(
     `gcloud services enable run.googleapis.com cloudbuild.googleapis.com ` +
     `artifactregistry.googleapis.com secretmanager.googleapis.com ` +
-    `firestore.googleapis.com --project ${projectId}`
+    `firestore.googleapis.com cloudscheduler.googleapis.com --project ${projectId}`
   );
+
+  c.info('Création des secrets (valeurs aléatoires si absents)...');
+  const secrets = {};
+  for (const name of ['JWT_SECRET', 'API_SECRET_KEY']) {
+    secrets[name] = ensureSecret(projectId, name);
+  }
 
   c.info('Création du repository Artifact Registry...');
   run(
@@ -77,12 +101,15 @@ function setupGcpProject(projectId, serviceName, region, label) {
   c.info('Configuration IAM Cloud Build...');
   const projectNumber = getProjectNumber(projectId);
   const cbSa = `${projectNumber}@cloudbuild.gserviceaccount.com`;
-  run(`gcloud projects add-iam-policy-binding ${projectId} --member=serviceAccount:${cbSa} --role=roles/run.admin`);
-  run(`gcloud projects add-iam-policy-binding ${projectId} --member=serviceAccount:${cbSa} --role=roles/iam.serviceAccountUser`);
+  addProjectRole(projectId, `serviceAccount:${cbSa}`, 'roles/run.admin');
+  addProjectRole(projectId, `serviceAccount:${cbSa}`, 'roles/iam.serviceAccountUser');
 
-  c.info('Accès Secret Manager pour Cloud Run...');
-  const computeSa = `${projectNumber}-compute@developer.gserviceaccount.com`;
-  run(`gcloud projects add-iam-policy-binding ${projectId} --member=serviceAccount:${computeSa} --role=roles/secretmanager.secretAccessor`);
+  c.info('Accès Secret Manager, Firestore et build pour le compte de service Cloud Run...');
+  const computeSa = `serviceAccount:${projectNumber}-compute@developer.gserviceaccount.com`;
+  addProjectRole(projectId, computeSa, 'roles/secretmanager.secretAccessor');
+  addProjectRole(projectId, computeSa, 'roles/datastore.user');
+  // Les projets récents construisent les sources (gcloud run deploy --source) avec ce compte
+  addProjectRole(projectId, computeSa, 'roles/cloudbuild.builds.builder');
 
   c.info('Premier déploiement backend...');
   run(
@@ -90,6 +117,35 @@ function setupGcpProject(projectId, serviceName, region, label) {
     `--region ${region} --project ${projectId} --allow-unauthenticated`
   );
   c.ok(`Backend déployé : ${serviceName} (${label})`);
+
+  c.info('Cloud Scheduler : résolution des tours toutes les 5 minutes...');
+  const url = execSync(
+    `gcloud run services describe ${serviceName} --region ${region} --project ${projectId} --format=value(status.url)`
+  ).toString().trim();
+  run(
+    `gcloud scheduler jobs create http ${serviceName}-tick --schedule="*/5 * * * *" ` +
+    `--uri=${url}/api/cron/tick --http-method=POST --headers=x-api-key=${secrets.API_SECRET_KEY} ` +
+    `--location=${region} --project ${projectId}`,
+    { ignoreError: true }
+  );
+}
+
+// Crée le secret s'il n'existe pas, et renvoie sa valeur
+function ensureSecret(projectId, name) {
+  try {
+    return execSync(
+      `gcloud secrets versions access latest --secret=${name} --project ${projectId}`,
+      { stdio: ['ignore', 'pipe', 'ignore'] }
+    ).toString();
+  } catch {
+    const value = require('crypto').randomBytes(32).toString('hex');
+    execSync(
+      `gcloud secrets create ${name} --data-file=- --replication-policy=automatic --project ${projectId}`,
+      { input: value, stdio: ['pipe', 'inherit', 'inherit'] }
+    );
+    c.ok(`Secret créé : ${name}`);
+    return value;
+  }
 }
 
 // ── Main ──────────────────────────────────────────────────────────────────────
@@ -191,9 +247,8 @@ function setupGcpProject(projectId, serviceName, region, label) {
   // ── Résumé ──────────────────────────────────────────────────────────────────
   c.success('Setup terminé');
   console.log('\n  Prochaines étapes :');
-  console.log('  1. Créer le secret API_SECRET_KEY dans Secret Manager (console GCP)');
-  console.log('  2. npm install && npm run dev     — lancer localement');
-  console.log('  3. npm run deploy:dev             — déployer en dev');
-  if (dualEnv) console.log('  4. npm run deploy:prod            — déployer en prod');
+  console.log('  1. npm install && npm run dev     — lancer localement');
+  console.log('  2. npm run deploy:dev             — déployer en dev');
+  if (dualEnv) console.log('  3. npm run deploy:prod            — déployer en prod');
   console.log('');
 })();

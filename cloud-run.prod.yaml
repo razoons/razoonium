@@ -1,21 +1,26 @@
 apiVersion: serving.knative.dev/v1
 kind: Service
 metadata:
-  name: serviceName
+  name: api-razoonium
   annotations:
     run.googleapis.com/ingress: all
 spec:
   template:
     spec:
       containers:
-        - image: regionId-docker.pkg.dev/projectId/serviceName/serviceName
+        - image: europe-west1-docker.pkg.dev/razoonium/api-razoonium/api-razoonium
           env:
             - name: GOOGLE_CLOUD_PROJECT
-              value: "projectId"
+              value: "razoonium"
             - name: APP_NAME
-              value: "appName"
+              value: "Razoonium"
             - name: ALLOWED_ORIGIN
-              value: "https://projectId.web.app"
+              value: "https://razoonium.web.app"
+            - name: API_SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: API_SECRET_KEY
+                  key: latest
             - name: JWT_SECRET
               valueFrom:
                 secretKeyRef:

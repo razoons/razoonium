@@ -10,8 +10,8 @@
       {
         "source": "/api/**",
         "run": {
-          "serviceId": "serviceName",
-          "region": "regionId"
+          "serviceId": "api-razoonium",
+          "region": "europe-west1"
         }
       },
       {

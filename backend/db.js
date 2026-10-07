@@ -3,4 +3,7 @@ const { getFirestore } = require('firebase-admin/firestore');
 
 initializeApp({ credential: applicationDefault(), projectId: process.env.GOOGLE_CLOUD_PROJECT });
 
-module.exports = getFirestore();
+const db = getFirestore();
+db.settings({ ignoreUndefinedProperties: true });
+
+module.exports = db;
