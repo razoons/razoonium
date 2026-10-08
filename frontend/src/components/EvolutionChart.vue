@@ -20,12 +20,22 @@
         >{{ k > maxDays ? 'Fin' : 'J' + k }}</text>
         <g v-for="s in series" :key="s.id" :class="['line', { on: hl === s.id }]">
           <polyline
+            v-if="s.projection" :points="s.projection" fill="none" :stroke="s.color" stroke-width="2"
+            stroke-dasharray="5 5" stroke-linejoin="round" stroke-linecap="round" opacity=".75"
+          />
+          <polyline
             :points="s.points" fill="none" :stroke="s.color" stroke-width="2"
             stroke-linejoin="round" stroke-linecap="round"
           />
           <circle :cx="s.last[0]" :cy="s.last[1]" r="4" :fill="s.color" stroke="#0a1226" stroke-width="2" />
         </g>
       </svg>
+    </div>
+    <div v-if="projection && series.some((s) => s.projection)" class="legend" style="margin-top:6px">
+      <span>
+        <svg width="22" height="4"><line x1="0" y1="2" x2="22" y2="2" stroke="var(--muted)" stroke-width="2" stroke-dasharray="5 5" /></svg>
+        Projection : boucliers actuels qui expirent, sans nouvelle défense ni attaque
+      </span>
     </div>
   </div>
 </template>
@@ -38,6 +48,9 @@ const props = defineProps({
   history: { type: Array, required: true },
   maxDays: { type: Number, default: 15 },
   metric: { type: String, default: 'b' }, // 'b' batteries, 's' boucliers
+  // Boucliers : prolonge chaque courbe en pointillés selon les expirations des couches actuelles
+  projection: { type: Boolean, default: false },
+  shieldDuration: { type: Number, default: 3 },
 });
 
 const box = ref(null);
@@ -73,8 +86,22 @@ const series = computed(() => props.players.map((p, id) => {
   const pts = hist
     .filter((h, i) => i === 0 || hist[i - 1].players[id].alive)
     .map((h) => [x(h.day), y(h.players[id][props.metric] ?? 0)]);
-  return { id, color: p.color, points: pts.map((q) => q.join(',')).join(' '), last: pts[pts.length - 1] };
+  const last = pts[pts.length - 1];
+  return { id, color: p.color, points: pts.map((q) => q.join(',')).join(' '), last, projection: projectionFor(p, last) };
 }));
+
+/* Bouclier au début du jour k : couches posées le jour d encore actives (d + durée − 1 ≥ k) */
+function projectionFor(p, last) {
+  const now = props.history[props.history.length - 1]?.day;
+  if (!props.projection || !p.alive || !p.shields?.length || now == null) return null;
+  const pts = [last];
+  for (let k = now + 1; k <= Math.min(nDays.value, now + props.shieldDuration); k++) {
+    const v = p.shields.filter((l) => l.day + props.shieldDuration - 1 >= k).reduce((s, l) => s + l.amount, 0);
+    pts.push([x(k), y(v)]);
+    if (!v) break;
+  }
+  return pts.length > 1 ? pts.map((q) => q.join(',')).join(' ') : null;
+}
 
 let observer;
 onMounted(() => {

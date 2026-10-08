@@ -1,6 +1,7 @@
 const crypto = require('crypto');
 const db = require('../db');
 const engine = require('./game.engine');
+const push = require('./push.service');
 
 const COLLECTION = 'games';
 const HOUR = 3600 * 1000;
@@ -67,13 +68,84 @@ function summaryFor(game, id, uid) {
   };
 }
 
-/* Résout tous les tours dus (échéance passée, ou tout le monde prêt). Transactionnel. */
+// ── Notifications ────────────────────────────────────────────────────────────
+
+const WEATHER_TXT = { calm: '☾ Calme', storm: '⚡ Tempête', abundance: '☀ Abondance' };
+const signed = (n) => (n >= 0 ? `+${n}` : `${n}`);
+
+function turnMessages(id, game) {
+  const last = game.log[0];
+  const tag = `game-${id}`;
+  const url = `/game/${id}?tab=journal`;
+  return game.players.flatMap((p, idx) => {
+    if (game.status === 'over') {
+      const rank = game.ranking.indexOf(idx) + 1;
+      return [{
+        uid: p.uid,
+        payload: {
+          title: `🏆 ${game.name} — partie terminée`,
+          body: rank !== 1 ? `Tu finis #${rank} sur ${game.players.length}.`
+            : p.alive ? `Victoire ! Tu finis #1 avec ${p.batteries} 🔋.`
+              : 'Tous les dômes se sont éteints — tu as tenu le plus longtemps (#1).',
+          url: `/game/${id}?tab=score`, tag,
+        },
+      }];
+    }
+    if (p.elimDay === last.day) {
+      return [{ uid: p.uid, payload: { title: `☠ ${game.name}`, body: `Jour ${last.day} : ton dôme s'est éteint.`, url, tag } }];
+    }
+    if (!p.alive) return [];
+    const b = last.bilan.find((x) => x.id === idx);
+    return [{
+      uid: p.uid,
+      payload: {
+        title: `${game.name} · Jour ${last.day} résolu`,
+        body: `${WEATHER_TXT[last.weather]} — 🔋 ${b.before} → ${b.after} (${signed(b.after - b.before)}). Donne tes ordres pour le jour ${game.day} !`,
+        url, tag,
+      },
+    }];
+  });
+}
+
+function launchMessages(id, game) {
+  return game.players.filter((p) => p.uid !== game.hostId).map((p) => ({
+    uid: p.uid,
+    payload: {
+      title: `⚡ ${game.name} a commencé`,
+      body: `Jour 1 — tu as ${engine.START_BATTERIES} 🔋. Résolution dans ${game.turnHours}h : donne tes ordres !`,
+      url: `/game/${id}`, tag: `game-${id}`,
+    },
+  }));
+}
+
+/* Rappel aux retardataires avant l'échéance (1h, ou un quart du tour s'il est plus court) */
+async function remindLatecomers(doc, now) {
+  const game = doc.data();
+  const before = Math.min(HOUR, (game.turnHours * HOUR) / 4);
+  if (game.reminderDay === game.day || game.deadline - now > before || game.deadline <= now) return false;
+  const orders = (await ordersOf(doc.ref).get()).docs.filter((d) => d.data().day === game.day && d.data().ready);
+  const late = game.players.filter((p) => p.alive && !orders.some((d) => d.id === p.uid));
+  await doc.ref.update({ reminderDay: game.day });
+  const minutes = Math.max(1, Math.round((game.deadline - now) / 60000));
+  await push.sendMany(late.map((p) => ({
+    uid: p.uid,
+    payload: {
+      title: `⏱ ${game.name} · Jour ${game.day}`,
+      body: `Résolution dans ${minutes >= 60 ? `${Math.round(minutes / 60)}h` : `${minutes} min`} et tu n'as pas validé tes ordres.`,
+      url: `/game/${doc.id}`, tag: `game-${doc.id}`,
+    },
+  })));
+  return late.length > 0;
+}
+
+/* Résout tous les tours dus (échéance passée, ou tout le monde prêt). Transactionnel.
+   Renvoie true si au moins un tour a été résolu (et prévient alors les joueurs). */
 async function maybeResolve(ref) {
-  return db.runTransaction(async (tx) => {
+  const resolvedGame = await db.runTransaction(async (tx) => {
     const snap = await tx.get(ref);
     if (!snap.exists) throw new GameError(404, 'Partie introuvable.');
     const game = snap.data();
-    if (game.status !== 'running') return false;
+    if (game.status !== 'running') return null;
 
     const orders = (await tx.get(ordersOf(ref))).docs.map((d) => ({ uid: d.id, ...d.data() }));
     const now = Date.now();
@@ -100,8 +172,11 @@ async function maybeResolve(ref) {
       if (game.status === 'over') game.deadline = null;
       tx.set(ref, game);
     }
-    return resolved > 0;
+    return resolved ? game : null;
   });
+  // hors transaction : une transaction peut être rejouée, pas les notifications
+  if (resolvedGame) await push.sendMany(turnMessages(ref.id, resolvedGame));
+  return !!resolvedGame;
 }
 
 async function loadView(ref, uid) {
@@ -173,7 +248,7 @@ async function leaveGame(user, id) {
 
 async function launchGame(user, id) {
   const ref = games().doc(id);
-  await db.runTransaction(async (tx) => {
+  const started = await db.runTransaction(async (tx) => {
     const snap = await tx.get(ref);
     if (!snap.exists) throw new GameError(404, 'Partie introuvable.');
     const game = snap.data();
@@ -184,7 +259,9 @@ async function launchGame(user, id) {
     game.startedAt = Date.now();
     game.deadline = game.startedAt + game.turnHours * HOUR;
     tx.set(ref, game);
+    return game;
   });
+  await push.sendMany(launchMessages(id, started));
   return loadView(ref, user.uid);
 }
 
@@ -214,15 +291,20 @@ async function submitOrders(user, id, rawOrders, ready) {
   return getGame(user, id);
 }
 
-/* Appelé par Cloud Scheduler : résout toutes les parties arrivées à échéance */
+/* Appelé par Cloud Scheduler : résout les parties arrivées à échéance et relance les retardataires */
 async function tick() {
   const snap = await games().where('status', '==', 'running').get();
   const now = Date.now();
   let resolved = 0;
+  let reminded = 0;
   for (const doc of snap.docs) {
-    if (doc.data().deadline <= now && await maybeResolve(doc.ref)) resolved++;
+    if (doc.data().deadline <= now) {
+      if (await maybeResolve(doc.ref)) resolved++;
+    } else if (push.enabled && await remindLatecomers(doc, now)) {
+      reminded++;
+    }
   }
-  return { checked: snap.size, resolved };
+  return { checked: snap.size, resolved, reminded };
 }
 
 module.exports = {

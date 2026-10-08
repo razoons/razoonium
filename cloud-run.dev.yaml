@@ -16,6 +16,18 @@ spec:
               value: "Razoonium-dev"
             - name: ALLOWED_ORIGIN
               value: "https://razoonium.web.app"
+            - name: VAPID_SUBJECT
+              value: "https://razoonium.web.app"
+            - name: VAPID_PUBLIC_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: VAPID_PUBLIC_KEY
+                  key: latest
+            - name: VAPID_PRIVATE_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: VAPID_PRIVATE_KEY
+                  key: latest
             - name: API_SECRET_KEY
               valueFrom:
                 secretKeyRef:

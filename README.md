@@ -98,6 +98,8 @@ npm run dev   # backend :8080 + frontend :5173
 | `MIN_PLAYERS` | normale | Joueurs minimum pour lancer (défaut : 4, mettre 2 pour tester) |
 | `API_SECRET_KEY` | **secret** | Clé envoyée par Cloud Scheduler (en-tête `x-api-key`) |
 | `JWT_SECRET` | **secret** | Signature des sessions |
+| `VAPID_SUBJECT` | normale | Contact déclaré aux services push (URL du site) |
+| `VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY` | **secret** | Paire de clés Web Push — sans elles, les notifications sont désactivées. `npm run secrets:vapid` copie celles de `backend/.env` dans Secret Manager (et les génère si absentes) |
 
 Les variables normales sont déclarées dans `cloud-run.dev.yaml` / `cloud-run.prod.yaml` et injectées automatiquement au déploiement.
 

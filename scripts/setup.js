@@ -84,6 +84,13 @@ function setupGcpProject(projectId, serviceName, region, label) {
   for (const name of ['JWT_SECRET', 'API_SECRET_KEY']) {
     secrets[name] = ensureSecret(projectId, name);
   }
+  // Clés VAPID (notifications push) : les deux secrets doivent former une paire
+  if (!secretExists(projectId, 'VAPID_PRIVATE_KEY')) {
+    const webpush = require(path.join(ROOT, 'backend', 'node_modules', 'web-push'));
+    const vapid = webpush.generateVAPIDKeys();
+    ensureSecret(projectId, 'VAPID_PUBLIC_KEY', vapid.publicKey, true);
+    ensureSecret(projectId, 'VAPID_PRIVATE_KEY', vapid.privateKey);
+  }
 
   c.info('Création du repository Artifact Registry...');
   run(
@@ -130,22 +137,38 @@ function setupGcpProject(projectId, serviceName, region, label) {
   );
 }
 
-// Crée le secret s'il n'existe pas, et renvoie sa valeur
-function ensureSecret(projectId, name) {
+function secretExists(projectId, name) {
   try {
+    execSync(`gcloud secrets describe ${name} --project ${projectId}`, { stdio: 'ignore' });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+// Crée le secret s'il n'existe pas (valeur aléatoire par défaut), et renvoie sa valeur.
+// `replace` : ajoute une nouvelle version même si le secret existe déjà.
+function ensureSecret(projectId, name, value = require('crypto').randomBytes(32).toString('hex'), replace = false) {
+  if (secretExists(projectId, name)) {
+    if (replace) {
+      execSync(
+        `gcloud secrets versions add ${name} --data-file=- --project ${projectId}`,
+        { input: value, stdio: ['pipe', 'inherit', 'inherit'] }
+      );
+      c.ok(`Secret mis à jour : ${name}`);
+      return value;
+    }
     return execSync(
       `gcloud secrets versions access latest --secret=${name} --project ${projectId}`,
       { stdio: ['ignore', 'pipe', 'ignore'] }
     ).toString();
-  } catch {
-    const value = require('crypto').randomBytes(32).toString('hex');
-    execSync(
-      `gcloud secrets create ${name} --data-file=- --replication-policy=automatic --project ${projectId}`,
-      { input: value, stdio: ['pipe', 'inherit', 'inherit'] }
-    );
-    c.ok(`Secret créé : ${name}`);
-    return value;
   }
+  execSync(
+    `gcloud secrets create ${name} --data-file=- --replication-policy=automatic --project ${projectId}`,
+    { input: value, stdio: ['pipe', 'inherit', 'inherit'] }
+  );
+  c.ok(`Secret créé : ${name}`);
+  return value;
 }
 
 // ── Main ──────────────────────────────────────────────────────────────────────

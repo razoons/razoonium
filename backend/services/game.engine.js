@@ -114,7 +114,7 @@ function resolveTurn(game, ordersByIdx) {
     if (o.atk > 0 && (o.atkTarget == null || !game.players[o.atkTarget]?.alive)) o.atk = 0;
     if (o.xfer > 0 && (o.xferTarget == null || !game.players[o.xferTarget]?.alive)) o.xfer = 0;
     if (spent(o) > p.batteries) Object.assign(o, emptyOrders());
-    C.set(id, { id, p, o, before: p.batteries, reserve: p.batteries - spent(o), gains: 0, pact: false });
+    C.set(id, { id, p, o, before: p.batteries, reserve: p.batteries - spent(o), genStake: o.gen, gains: 0, pact: false });
   });
 
   // 1. Coût de vie
@@ -178,12 +178,18 @@ function resolveTurn(game, ordersByIdx) {
     destroyShields(tc.p, absorbed);
     const net = A - absorbed;
     const netShares = prorata(net, atks.map((a) => a.o.atk));
-    const steal = Math.min(net, Math.max(0, tc.reserve));
-    tc.reserve -= steal;
+    // Pillage : d'abord la réserve libre, puis les batteries misées en génération
+    const free = Math.max(0, tc.reserve);
+    const steal = Math.min(net, free + tc.genStake);
+    const fromReserve = Math.min(steal, free);
+    const fromGen = steal - fromReserve;
+    tc.reserve -= fromReserve;
+    tc.genStake -= fromGen;
     const stealShares = prorata(steal, netShares);
     atks.forEach((a, i) => { a.gains += netShares[i] + stealShares[i]; });
     const who = atks.map((a) => `{p:${a.id}} (${a.o.atk})`).join(' + ');
-    lines.push(`Attaque sur {p:${tid}} par ${who} : ${absorbed} absorbé(s) par le bouclier, ${net} net, ${steal} volée(s).`);
+    const genNote = fromGen ? ` (dont ${fromGen} sur sa génération)` : '';
+    lines.push(`Attaque de ${who} sur {p:${tid}} : ${absorbed} perdue(s) sur le bouclier, ${net} récupérée(s), +${steal} pillée(s)${genNote}.`);
   });
 
   // 6. Expiration des boucliers (actifs 3 tours : jour J, J+1, J+2)
@@ -191,13 +197,15 @@ function resolveTurn(game, ordersByIdx) {
     c.p.shields = c.p.shields.filter((l) => l.amount > 0 && day - l.day < SHIELD_DURATION - 1);
   });
 
-  // 7. Récoltes & réceptions
+  // 7. Récoltes & réceptions (génération calculée sur la mise restante après pillage)
   C.forEach((c) => {
     if (c.o.gen > 0) {
       const mult = c.pact ? pactMult : genMult;
-      const y = Math.floor(c.o.gen * mult);
+      const y = Math.floor(c.genStake * mult);
       c.gains += y;
-      lines.push(`{p:${c.id}} génère ${y} 🔋 (${c.o.gen} × ${String(mult).replace('.', ',')}).`);
+      const lost = c.o.gen - c.genStake;
+      const lostNote = lost ? `, ${lost} pillée(s) sur ${c.o.gen}` : '';
+      lines.push(`{p:${c.id}} génère ${y} 🔋 (${c.genStake} × ${String(mult).replace('.', ',')}${lostNote}).`);
     }
     if (c.o.xfer > 0) {
       C.get(c.o.xferTarget).gains += c.o.xfer;

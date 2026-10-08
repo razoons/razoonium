@@ -1,6 +1,21 @@
 <template>
   <div class="page narrow">
     <div class="stack">
+      <div v-if="showPushInvite" class="panel notif-invite">
+        <v-icon size="28" color="success">mdi-bell-ring-outline</v-icon>
+        <div style="flex:1">
+          <b>Sois prévenu à chaque tour</b>
+          <div class="muted" style="font-size:14px">
+            <template v-if="push.needsInstall">
+              Sur iPhone, installe d'abord l'appli : Partager → « Sur l'écran d'accueil ».
+            </template>
+            <template v-else>Début de partie, résultat de chaque tour, rappel avant l'échéance.</template>
+          </div>
+        </div>
+        <button v-if="push.needsInstall" class="btn primary" @click="install.helpOpen = true">Comment installer</button>
+        <button v-else class="btn primary" :disabled="push.busy" @click="activatePush">Activer</button>
+      </div>
+
       <div class="panel">
         <div class="ptitle">Mes parties <span class="tag">{{ games.length }}</span></div>
         <v-progress-linear v-if="loading" indeterminate color="primary" />
@@ -66,11 +81,25 @@
 </template>
 
 <script setup>
-import { ref, onMounted, onBeforeUnmount } from 'vue';
+import { ref, computed, onMounted, onBeforeUnmount } from 'vue';
 import { useRouter } from 'vue-router';
 import api from '../api';
 import { toast } from '../stores/toast';
 import { timeLeft } from '../game';
+import { push, enablePush } from '../stores/push';
+import { install } from '../stores/install';
+
+const showPushInvite = computed(() => !push.subscribed
+  && (push.needsInstall || (push.supported && push.permission !== 'denied')));
+
+async function activatePush() {
+  try {
+    await enablePush();
+    toast('Notifications activées');
+  } catch (e) {
+    toast(e.message);
+  }
+}
 
 const router = useRouter();
 const games = ref([]);

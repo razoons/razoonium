@@ -43,7 +43,8 @@ Chaque jour, avant l'heure limite de résolution, tu répartis tes Batteries de 
 - **Casser la Défense** : Les Batteries d'attaque utilisées pour passer le Bouclier de la cible sont **définitivement perdues**.
 - **Pillage (Dégâts nets)** : Toutes les Batteries d'attaque qui dépassent le Bouclier :
   1. Te sont **restituées** au tour suivant.
-  2. **Volent 1 Batterie supplémentaire** dans la réserve de la cible.
+  2. **Volent 1 Batterie supplémentaire** à la cible : d'abord dans sa réserve libre, puis dans les Batteries qu'elle a misées en *Génération*. Les mises en Défense et en Enchère ne sont pas pillables.
+- **Génération après l'attaque** : le rendement de la *Génération* est calculé sur la mise restante après pillage.
 - **Attaques multiples** : Si plusieurs joueurs attaquent la même cible, les Boucliers sont entamés en commun et le pillage est réparti au prorata des dégâts nets.
 
 ### C. Le Pacte d'Alliance
@@ -82,6 +83,6 @@ Dé virtuel à 6 faces lancé à chaque résolution :
 2. **Tirage de la Météo**.
 3. **Résolution des Enchères** (Attribution des lots et paiement des mises).
 4. **Vérification des Pactes** (Réciprocité → bonus de Génération).
-5. **Résolution des Attaques** (Destruction des boucliers anciens + Calcul du pillage).
+5. **Résolution des Attaques** (Destruction des boucliers anciens + Calcul du pillage, sur la réserve puis la mise en Génération).
 6. **Mise à jour des Boucliers** (Expiration des boucliers de plus de 3 tours).
-7. **Récoltes & Réceptions** (Gains de *Génération* + *Batteries volées* + *Transferts*).
+7. **Récoltes & Réceptions** (Gains de *Génération* sur la mise restante + *Batteries volées* + *Transferts*).

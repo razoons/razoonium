@@ -27,8 +27,12 @@ export default defineConfig({
           { src: 'maskable-icon-512x512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
         ],
       },
+      // Service worker actif aussi en dev (localhost) pour tester les notifications
+      devOptions: { enabled: true },
       workbox: {
+        importScripts: ['push-sw.js'],
         globPatterns: ['**/*.{js,css,html,svg,png,ico,woff2}'],
+        globIgnores: ['push-sw.js'],
         navigateFallbackDenylist: [/^\/api\//],
         runtimeCaching: [
           {

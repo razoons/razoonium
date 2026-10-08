@@ -42,7 +42,8 @@
         <h3>Attaque & pillage</h3>
         <ul>
           <li>Les Batteries qui cassent le Bouclier adverse sont <b class="red">perdues</b>.</li>
-          <li>Celles qui le dépassent te sont <b class="lime">restituées</b> et volent chacune 1 Batterie à la cible.</li>
+          <li>Celles qui le dépassent te sont <b class="lime">restituées</b> et volent chacune 1 Batterie à la cible : dans sa réserve libre, puis dans sa mise en <b>Génération</b>.</li>
+          <li>La Génération est calculée <b>après</b> les attaques, sur la mise restante.</li>
           <li>Plusieurs attaquants sur une même cible : Boucliers entamés en commun, pillage au prorata.</li>
         </ul>
         <h3>Pacte</h3>

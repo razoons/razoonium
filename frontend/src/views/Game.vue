@@ -206,12 +206,22 @@
       <!-- Score -->
       <main v-else-if="tab === 'score'" class="board stack">
         <section class="panel">
-          <div class="ptitle">Classement {{ g.status === 'over' ? 'final' : 'provisoire' }}</div>
+          <div class="ptitle">
+            Classement {{ g.status === 'over' ? 'final' : 'provisoire' }}
+            <span v-if="g.status === 'running'" class="tag">Ordres validés {{ readyCount }}/{{ alive.length }}</span>
+          </div>
           <div class="rank" style="margin:0">
             <div v-for="(id, i) in standings" :key="id" :class="{ dead: !g.players[id].alive }">
               <span class="pos">#{{ i + 1 }}</span>
-              <span :style="{ color: g.players[id].color, fontWeight: 700 }">
-                {{ g.players[id].name }}<span v-if="id === g.me" class="muted"> (toi)</span>
+              <span class="who-cell">
+                <span :style="{ color: g.players[id].color, fontWeight: 700 }">
+                  {{ g.players[id].name }}<span v-if="id === g.me" class="muted"> (toi)</span>
+                </span>
+                <span
+                  v-if="g.status === 'running' && g.players[id].alive"
+                  :class="['status', g.ready[id] ? 'ready' : 'wait']"
+                  :title="g.ready[id] ? 'Ordres validés pour ce tour' : 'Ordres pas encore validés'"
+                >{{ g.ready[id] ? '✔ PRÊT' : '… EN ATTENTE' }}</span>
               </span>
               <template v-if="g.players[id].alive">
                 <span class="num">🔋 {{ g.players[id].batteries }}</span>
@@ -230,6 +240,7 @@
           <EvolutionChart
             :key="chartTab" :players="g.players" :history="g.history"
             :max-days="g.maxDays" :metric="chartTab"
+            :projection="chartTab === 's' && g.status === 'running'" :shield-duration="g.shieldDuration"
           />
           <p v-if="g.history.length < 2" class="empty" style="margin:12px 0 0">
             Les courbes se dessinent à partir de la première résolution.
@@ -305,6 +316,7 @@ const now = ref(Date.now());
 const isHost = computed(() => g.value?.hostId === auth.user?.id);
 const me = computed(() => g.value.players[g.value.me]);
 const alive = computed(() => g.value.players.filter((p) => p.alive));
+const readyCount = computed(() => g.value.players.filter((p, i) => p.alive && g.value.ready[i]).length);
 const used = computed(() => spent(draft.value));
 const remaining = computed(() => me.value.batteries - used.value);
 const editable = computed(() => g.value.status === 'running' && me.value.alive && (!g.value.myReady || dirty.value));

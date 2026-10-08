@@ -5,6 +5,7 @@ const cors = require('cors');
 const authRoutes = require('./routes/auth.routes');
 const gameRoutes = require('./routes/game.routes');
 const cronRoutes = require('./routes/cron.routes');
+const pushRoutes = require('./routes/push.routes');
 
 const app = express();
 const port = process.env.PORT || 8080;
@@ -21,6 +22,7 @@ app.use(express.json());
 app.use('/api/auth', authRoutes);
 app.use('/api/games', gameRoutes);
 app.use('/api/cron', cronRoutes);
+app.use('/api/push', pushRoutes);
 
 app.get('/health', (_req, res) => {
   res.json({ status: 'ok' });
@@ -40,5 +42,8 @@ app.listen(port, () => {
   }
   if (!apiSecretKey) {
     console.warn('⚠️  API_SECRET_KEY non définie — /api/cron/tick désactivé.');
+  }
+  if (!process.env.VAPID_PRIVATE_KEY) {
+    console.warn('⚠️  VAPID_PRIVATE_KEY non définie — notifications push désactivées.');
   }
 });
