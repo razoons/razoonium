@@ -14,7 +14,7 @@ api.interceptors.response.use(
     if (err.response?.status === 401 && auth.token) logout();
     const message = err.response?.data?.error
       || (err.response ? `Erreur ${err.response.status}` : 'Réseau indisponible.');
-    return Promise.reject(new Error(message));
+    return Promise.reject(Object.assign(new Error(message), { status: err.response?.status }));
   },
 );
 

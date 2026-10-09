@@ -49,7 +49,7 @@
           </div>
         </div>
         <div v-if="g.status === 'running'" class="infobox">
-          <span class="ico" style="color:var(--magenta)">⏱</span>
+          <v-icon class="ico" color="var(--magenta)" :icon="ICONS.timer" />
           <div>
             <div class="lbl">RÉSOLUTION DANS</div>
             <div :class="['val', 'countdown', { urgent: g.deadline - now < 3600e3 }]">
@@ -59,7 +59,7 @@
         </div>
         <div class="infobox">
           <template v-if="g.lastWeather">
-            <span class="ico" :style="{ color: WEATHER[g.lastWeather.weather].color }">{{ WEATHER[g.lastWeather.weather].icon }}</span>
+            <v-icon class="ico" :color="WEATHER[g.lastWeather.weather].color" :icon="WEATHER[g.lastWeather.weather].icon" />
             <div>
               <div class="lbl">MÉTÉO J{{ g.day - 1 }} · DÉ {{ g.lastWeather.die }}</div>
               <div class="val" :style="{ color: WEATHER[g.lastWeather.weather].color }">{{ WEATHER[g.lastWeather.weather].label }}</div>
@@ -97,7 +97,12 @@
 
           <div class="stats">
             <div class="stat">
-              <div class="k">Batteries</div>
+              <div class="k"><v-icon class="mi" size="1.1em" :icon="ICONS.razoonium" /> Razoonium</div>
+              <div class="v teal">{{ me.razoonium || 0 }}</div>
+              <div class="s">score · imprenable</div>
+            </div>
+            <div class="stat">
+              <div class="k"><v-icon class="mi" size="1.1em" :icon="ICONS.battery" /> Batteries</div>
               <div class="v lime">{{ me.batteries }}</div>
               <div class="cells">
                 <i
@@ -107,8 +112,9 @@
               </div>
             </div>
             <div class="stat">
-              <div class="k">Bouclier</div>
+              <div class="k"><v-icon class="mi" size="1.1em" :icon="ICONS.shield" /> Bouclier</div>
               <div class="v cyan">{{ shieldTotal(me) }}</div>
+              <div v-if="draft.pact != null && shieldTotal(me)" class="s"><v-icon class="mi" size="1.1em" :icon="ICONS.shieldOff" /> inactif ce tour (pacte)</div>
               <div class="layers">
                 <span
                   v-for="(l, i) in me.shields" :key="i"
@@ -127,11 +133,12 @@
               <div v-for="(id, i) in g.ranking" :key="id" :class="{ dead: !g.players[id].alive }">
                 <span class="pos">#{{ i + 1 }}</span>
                 <span :style="{ color: g.players[id].color, fontWeight: 700 }">{{ g.players[id].name }}</span>
+                <span class="num teal"><v-icon class="mi" size="1.1em" :icon="ICONS.razoonium" /> {{ g.players[id].razoonium || 0 }}</span>
                 <template v-if="g.players[id].alive">
-                  <span class="num">🔋 {{ g.players[id].batteries }}</span>
-                  <span class="num">🛡 {{ shieldTotal(g.players[id]) }}</span>
+                  <span class="num"><v-icon class="mi" size="1.1em" :icon="ICONS.battery" /> {{ g.players[id].batteries }}</span>
+                  <span class="num"><v-icon class="mi" size="1.1em" :icon="ICONS.shield" /> {{ shieldTotal(g.players[id]) }}</span>
                 </template>
-                <span v-else class="out">☠ jour {{ g.players[id].elimDay }}</span>
+                <span v-else class="out"><v-icon class="mi" size="1.1em" :icon="ICONS.dead" /> jour {{ g.players[id].elimDay }}</span>
               </div>
             </div>
           </template>
@@ -147,7 +154,7 @@
                 :disabled="blockedByPact(a)" :title="blockedByPact(a) ? 'Interdit pendant un pacte' : ''"
                 @click="openKey = a.key"
               >
-                <span class="ic"><span>{{ a.icon }}</span></span>
+                <span class="ic"><v-icon :icon="a.icon" /></span>
                 <span class="nm">{{ a.name }}</span>
                 <span class="sm">{{ summary(a) }}</span>
                 <span v-if="!a.noAmount && draft[a.key] > 0" class="badge">{{ draft[a.key] }}</span>
@@ -157,13 +164,15 @@
             <v-dialog v-model="actionOpen" max-width="440">
               <div v-if="current" class="acard on modal" :style="{ '--a': current.color }">
                 <div class="hd">
-                  <div class="ic"><span>{{ current.icon }}</span></div>
+                  <div class="ic"><v-icon :icon="current.icon" /></div>
                   <div style="flex:1"><div class="nm">{{ current.name }}</div><div class="tg">{{ current.tag }}</div></div>
                   <button class="btn ghost icon" title="Fermer" @click="openKey = null"><v-icon size="18">mdi-close</v-icon></button>
                 </div>
                 <div class="ds">{{ current.desc }}</div>
                 <div v-if="current.key === 'bid'" class="lotchips">
-                  <span v-for="(v, i) in g.lots" :key="i"><small>LOT {{ i + 1 }}</small> +{{ v }} 🔋</span>
+                  <span v-for="(v, i) in g.lots" :key="i">
+                    <small>LOT {{ i + 1 }}</small> +{{ v }} <v-icon class="mi" size="1.1em" :icon="ICONS.razoonium" />
+                  </span>
                   <span v-if="!g.lots.length" class="empty">Aucun lot aujourd'hui</span>
                 </div>
                 <div v-if="!current.noAmount" class="stepper">
@@ -179,7 +188,7 @@
                 </select>
                 <div class="pv">{{ preview(current.key) }}</div>
                 <div class="mfoot">
-                  <span class="muted">Disponibles : <b class="lime">{{ remaining }}</b> 🔋</span>
+                  <span class="muted">Disponibles : <b class="lime">{{ remaining }}</b> <v-icon class="mi" size="1.1em" :icon="ICONS.battery" /></span>
                   <span v-if="!editable" class="muted">Ordres verrouillés</span>
                   <button class="btn primary" @click="openKey = null">OK</button>
                 </div>
@@ -223,19 +232,21 @@
                   :title="g.ready[id] ? 'Ordres validés pour ce tour' : 'Ordres pas encore validés'"
                 >{{ g.ready[id] ? '✔ PRÊT' : '… EN ATTENTE' }}</span>
               </span>
+              <span class="num teal"><v-icon class="mi" size="1.1em" :icon="ICONS.razoonium" /> {{ g.players[id].razoonium || 0 }}</span>
               <template v-if="g.players[id].alive">
-                <span class="num">🔋 {{ g.players[id].batteries }}</span>
-                <span class="num">🛡 {{ shieldTotal(g.players[id]) }}</span>
+                <span class="num"><v-icon class="mi" size="1.1em" :icon="ICONS.battery" /> {{ g.players[id].batteries }}</span>
+                <span class="num"><v-icon class="mi" size="1.1em" :icon="ICONS.shield" /> {{ shieldTotal(g.players[id]) }}</span>
               </template>
-              <span v-else class="out">☠ jour {{ g.players[id].elimDay }}</span>
+              <span v-else class="out"><v-icon class="mi" size="1.1em" :icon="ICONS.dead" /> jour {{ g.players[id].elimDay }}</span>
             </div>
           </div>
         </section>
         <section class="panel">
           <div class="ptitle">Évolution</div>
           <div class="tabs">
-            <button :class="{ on: chartTab === 'b' }" @click="chartTab = 'b'">🔋 Batteries</button>
-            <button :class="{ on: chartTab === 's' }" @click="chartTab = 's'">🛡 Boucliers</button>
+            <button :class="{ on: chartTab === 'r' }" @click="chartTab = 'r'"><v-icon class="mi" size="1.1em" :icon="ICONS.razoonium" /> Razoonium</button>
+            <button :class="{ on: chartTab === 'b' }" @click="chartTab = 'b'"><v-icon class="mi" size="1.1em" :icon="ICONS.battery" /> Batteries</button>
+            <button :class="{ on: chartTab === 's' }" @click="chartTab = 's'"><v-icon class="mi" size="1.1em" :icon="ICONS.shield" /> Boucliers</button>
           </div>
           <EvolutionChart
             :key="chartTab" :players="g.players" :history="g.history"
@@ -245,6 +256,17 @@
           <p v-if="g.history.length < 2" class="empty" style="margin:12px 0 0">
             Les courbes se dessinent à partir de la première résolution.
           </p>
+        </section>
+        <section v-if="isHost" class="panel">
+          <div class="ptitle">Zone hôte</div>
+          <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+            <span class="muted" style="flex:1;min-width:200px">
+              Supprime définitivement la partie pour tous les joueurs, même en cours. Action irréversible.
+            </span>
+            <button class="btn danger" :disabled="busy" @click="removeGame">
+              <v-icon size="18">mdi-delete-outline</v-icon> Supprimer la partie
+            </button>
+          </div>
         </section>
       </main>
 
@@ -256,9 +278,13 @@
             <div v-for="e in g.log" :key="e.day" class="entry" :style="{ borderColor: WEATHER[e.weather].color }">
               <h4>
                 JOUR {{ String(e.day).padStart(2, '0') }}
-                <span>{{ WEATHER[e.weather].icon }} {{ WEATHER[e.weather].label }} · dé {{ e.die }}</span>
+                <span><v-icon class="mi" size="1.1em" :icon="WEATHER[e.weather].icon" /> {{ WEATHER[e.weather].label }} · dé {{ e.die }}</span>
               </h4>
-              <ul><li v-for="(l, i) in e.lines" :key="i"><LogLine :line="l" :players="g.players" /></li></ul>
+              <ul>
+                <li v-for="(l, i) in e.lines" :key="i" :class="{ sub: l.startsWith('↳ ') }">
+                  <LogLine :line="l.replace(/^↳ /, '')" :players="g.players" />
+                </li>
+              </ul>
               <div class="bilan">
                 <template v-for="b in e.bilan" :key="b.id">
                   <span :style="{ color: g.players[b.id].color }">{{ g.players[b.id].name }}</span>
@@ -282,7 +308,7 @@ import { useRoute, useRouter } from 'vue-router';
 import api from '../api';
 import { auth } from '../stores/auth';
 import { toast } from '../stores/toast';
-import { ACTIONS, WEATHER, emptyOrders, spent, shieldTotal, timeLeft } from '../game';
+import { ACTIONS, WEATHER, ICONS, emptyOrders, spent, shieldTotal, timeLeft } from '../game';
 import EvolutionChart from '../components/EvolutionChart.vue';
 import LogLine from '../components/LogLine.vue';
 
@@ -304,7 +330,7 @@ const g = ref(null);
 const draft = ref(emptyOrders());
 const dirty = ref(false);
 const busy = ref(false);
-const chartTab = ref('b');
+const chartTab = ref('r');
 const openKey = ref(null);
 const current = computed(() => ACTIONS.find((a) => a.key === openKey.value));
 const actionOpen = computed({
@@ -331,13 +357,13 @@ const endSummary = computed(() => {
   const win = g.value.players[g.value.ranking[0]];
   if (!alive.value.length) return 'Tous les dômes se sont éteints.';
   if (alive.value.length === 1 && g.value.day <= g.value.maxDays) return `${win.name} est le dernier dôme debout.`;
-  return `${g.value.maxDays} jours écoulés. ${win.name} l'emporte avec ${win.batteries} batteries.`;
+  return `${g.value.maxDays} jours écoulés. ${win.name} l'emporte avec ${win.razoonium || 0} Razoonium.`;
 });
 
-// Classement : vivants d'abord, puis batteries, bouclier, jour d'élimination
+// Classement : vivants d'abord, puis Razoonium, batteries, bouclier, jour d'élimination
 const standings = computed(() => g.value.ranking ?? g.value.players
   .map((p, id) => ({ p, id }))
-  .sort((a, b) => (b.p.alive - a.p.alive) || b.p.batteries - a.p.batteries
+  .sort((a, b) => (b.p.alive - a.p.alive) || (b.p.razoonium || 0) - (a.p.razoonium || 0) || b.p.batteries - a.p.batteries
     || shieldTotal(b.p) - shieldTotal(a.p) || (b.p.elimDay || 0) - (a.p.elimDay || 0))
   .map((x) => x.id));
 
@@ -348,7 +374,7 @@ function apply(data) {
   g.value = data;
   if (prev && prev.day !== data.day && data.status !== 'lobby') {
     const w = data.lastWeather && WEATHER[data.lastWeather.weather];
-    toast(`Jour ${prev.day} résolu${w ? ` — ${w.icon} ${w.label}` : ''}`);
+    toast(`Jour ${prev.day} résolu${w ? ` — ${w.label}` : ''}`);
     dirty.value = false;
   }
   if (!dirty.value) draft.value = { ...emptyOrders(), ...data.myOrders };
@@ -358,6 +384,11 @@ async function load() {
   try {
     apply((await api.get(`/games/${props.id}`)).data);
   } catch (e) {
+    // partie supprimée par l'hôte pendant qu'on la consultait
+    if (e.status === 404 && g.value) {
+      toast('Cette partie a été supprimée par l\'hôte.');
+      return router.replace('/');
+    }
     toast(e.message);
     if (!g.value) router.replace('/');
   }
@@ -409,6 +440,21 @@ async function leave() {
   router.replace('/');
 }
 
+async function removeGame() {
+  const warn = g.value.status === 'running' ? ' La partie est en cours : tous les joueurs la perdront.' : '';
+  if (!confirm(`Supprimer définitivement « ${g.value.name} » ?${warn}`)) return;
+  busy.value = true;
+  try {
+    await api.delete(`/games/${props.id}`);
+    toast('Partie supprimée');
+    router.replace('/');
+  } catch (e) {
+    toast(e.message);
+  } finally {
+    busy.value = false;
+  }
+}
+
 async function share() {
   const text = `Rejoins ma partie de Razoonium « ${g.value.name} » avec le code ${g.value.code}`;
   try {
@@ -441,7 +487,7 @@ function summary(a) {
   const o = draft.value;
   if (blockedByPact(a)) return '∞ pacte';
   if (!isOn(a)) return a.tag;
-  if (!a.target) return a.key === 'gen' ? `→ +${Math.floor(o.gen * 1.5)}` : a.key === 'def' ? `🛡 +${o.def}` : `mise ${o.bid}`;
+  if (!a.target) return { gen: `→ +${Math.floor(o.gen * 1.5)}`, def: `bouclier +${o.def}`, bid: `mise ${o.bid}`, ref: `score +${o.ref}` }[a.key];
   const t = o[a.target];
   return t == null ? '⚠ cible ?' : `→ ${g.value.players[t].name}`;
 }
@@ -458,11 +504,12 @@ function preview(key) {
       return `→ ${nm(o.atkTarget)} · bouclier visible ${shieldTotal(g.value.players[o.atkTarget])}`;
     case 'pact':
       if (o.pact == null) return '';
-      return `→ si ${nm(o.pact)} accepte aussi : génération ×2`;
+      return `→ si ${nm(o.pact)} accepte aussi : génération ×2 · tes boucliers sont inactifs ce tour`;
     case 'xfer':
       if (!o.xfer) return '';
       return o.xferTarget == null ? '⚠ choisis une cible' : `→ ${o.xfer} pour ${nm(o.xferTarget)}`;
     case 'bid': return o.bid ? `→ mise de ${o.bid} sur ${g.value.lots.length} lot(s)` : '';
+    case 'ref': return o.ref ? `→ Razoonium ${me.value.razoonium || 0} → ${(me.value.razoonium || 0) + o.ref}` : '';
   }
   return '';
 }

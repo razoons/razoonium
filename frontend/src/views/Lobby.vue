@@ -34,8 +34,9 @@
                 <span>Code <b>{{ g.code }}</b></span>
                 <span v-if="g.status === 'lobby'"><b>{{ g.playerCount }}</b> / 8 dômes</span>
                 <span v-else>Jour <b>{{ Math.min(g.day, 15) }}</b> / 15</span>
-                <span v-if="g.status === 'running' && g.alive">🔋 <b>{{ g.batteries }}</b></span>
-                <span v-if="g.status === 'running' && g.deadline">⏱ <b class="countdown">{{ timeLeft(g.deadline, now) }}</b></span>
+                <span v-if="g.status === 'running' && g.alive"><v-icon class="mi" size="1.1em" :icon="ICONS.battery" /> <b>{{ g.batteries }}</b></span>
+                <span v-if="g.status === 'running'"><v-icon class="mi" size="1.1em" :icon="ICONS.razoonium" /> <b>{{ g.razoonium }}</b></span>
+                <span v-if="g.status === 'running' && g.deadline"><v-icon class="mi" size="1.1em" :icon="ICONS.timer" /> <b class="countdown">{{ timeLeft(g.deadline, now) }}</b></span>
               </div>
             </span>
             <span :class="['status', statusOf(g).cls]">{{ statusOf(g).label }}</span>
@@ -85,7 +86,7 @@ import { ref, computed, onMounted, onBeforeUnmount } from 'vue';
 import { useRouter } from 'vue-router';
 import api from '../api';
 import { toast } from '../stores/toast';
-import { timeLeft } from '../game';
+import { timeLeft, ICONS } from '../game';
 import { push, enablePush } from '../stores/push';
 import { install } from '../stores/install';
 

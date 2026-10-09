@@ -21,6 +21,11 @@ async function leave(req, res) {
   res.status(204).end();
 }
 
+async function remove(req, res) {
+  await games.deleteGame(req.user, req.params.id);
+  res.status(204).end();
+}
+
 async function start(req, res) {
   res.json(await games.launchGame(req.user, req.params.id));
 }
@@ -34,4 +39,4 @@ async function tick(_req, res) {
   res.json(await games.tick());
 }
 
-module.exports = { list, create, join, get, leave, start, orders, tick };
+module.exports = { list, create, join, get, leave, remove, start, orders, tick };

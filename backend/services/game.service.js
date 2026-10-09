@@ -63,6 +63,7 @@ function summaryFor(game, id, uid) {
     deadline: game.deadline ?? null,
     playerCount: game.players.length,
     batteries: me?.batteries ?? null,
+    razoonium: me?.razoonium ?? 0,
     alive: me?.alive ?? true,
     isHost: game.hostId === uid,
   };
@@ -85,7 +86,7 @@ function turnMessages(id, game) {
         payload: {
           title: `🏆 ${game.name} — partie terminée`,
           body: rank !== 1 ? `Tu finis #${rank} sur ${game.players.length}.`
-            : p.alive ? `Victoire ! Tu finis #1 avec ${p.batteries} 🔋.`
+            : p.alive ? `Victoire ! Tu finis #1 avec ${p.razoonium || 0} Razoonium.`
               : 'Tous les dômes se sont éteints — tu as tenu le plus longtemps (#1).',
           url: `/game/${id}?tab=score`, tag,
         },
@@ -246,6 +247,25 @@ async function leaveGame(user, id) {
   });
 }
 
+/* L'hôte supprime définitivement la partie, quel que soit son état (ordres compris) */
+async function deleteGame(user, id) {
+  const ref = games().doc(id);
+  const snap = await ref.get();
+  if (!snap.exists) throw new GameError(404, 'Partie introuvable.');
+  const game = snap.data();
+  if (game.hostId !== user.uid) throw new GameError(403, 'Seul l\'hôte peut supprimer la partie.');
+  const batch = db.batch();
+  (await ordersOf(ref).get()).docs.forEach((d) => batch.delete(d.ref));
+  batch.delete(ref);
+  await batch.commit();
+  if (game.status !== 'lobby') {
+    await push.sendMany(game.players.filter((p) => p.uid !== user.uid).map((p) => ({
+      uid: p.uid,
+      payload: { title: `🗑 ${game.name}`, body: 'L\'hôte a supprimé la partie.', url: '/', tag: `game-${id}` },
+    })));
+  }
+}
+
 async function launchGame(user, id) {
   const ref = games().doc(id);
   const started = await db.runTransaction(async (tx) => {
@@ -308,5 +328,5 @@ async function tick() {
 }
 
 module.exports = {
-  GameError, listMyGames, createGame, joinGame, leaveGame, launchGame, getGame, submitOrders, tick,
+  GameError, listMyGames, createGame, joinGame, leaveGame, deleteGame, launchGame, getGame, submitOrders, tick,
 };

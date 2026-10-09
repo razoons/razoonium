@@ -47,7 +47,7 @@ const props = defineProps({
   players: { type: Array, required: true },
   history: { type: Array, required: true },
   maxDays: { type: Number, default: 15 },
-  metric: { type: String, default: 'b' }, // 'b' batteries, 's' boucliers
+  metric: { type: String, default: 'b' }, // 'b' batteries, 's' boucliers, 'r' Razoonium
   // Boucliers : prolonge chaque courbe en pointillés selon les expirations des couches actuelles
   projection: { type: Boolean, default: false },
   shieldDuration: { type: Number, default: 3 },

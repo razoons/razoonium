@@ -15,10 +15,11 @@ const WEATHER = {
 };
 
 const rand = (a, b) => a + Math.floor(Math.random() * (b - a + 1));
-const emptyOrders = () => ({ gen: 0, def: 0, atk: 0, atkTarget: null, pact: null, xfer: 0, xferTarget: null, bid: 0 });
-const spent = (o) => o.gen + o.def + o.atk + o.xfer + o.bid;
+const emptyOrders = () => ({ gen: 0, def: 0, atk: 0, atkTarget: null, pact: null, xfer: 0, xferTarget: null, bid: 0, ref: 0 });
+const spent = (o) => o.gen + o.def + o.atk + o.xfer + o.bid + o.ref;
 const shieldTotal = (p) => p.shields.reduce((s, l) => s + l.amount, 0);
 
+/* Lots du jour : quantités de Razoonium, triées par ordre décroissant */
 function rollLots(aliveCount) {
   const n = Math.floor(aliveCount / 2);
   return Array.from({ length: n }, () => rand(2, 8)).sort((a, b) => b - a);
@@ -50,7 +51,7 @@ function destroyShields(p, dmg) {
 function sanitizeOrders(raw, game, idx) {
   const me = game.players[idx];
   const o = emptyOrders();
-  for (const k of ['gen', 'def', 'atk', 'xfer', 'bid']) {
+  for (const k of ['gen', 'def', 'atk', 'xfer', 'bid', 'ref']) {
     const v = Number(raw?.[k] ?? 0);
     if (!Number.isInteger(v) || v < 0) throw new Error(`Valeur invalide pour "${k}".`);
     o[k] = v;
@@ -75,7 +76,7 @@ function sanitizeOrders(raw, game, idx) {
 function snapshot(game) {
   game.history.push({
     day: game.day,
-    players: game.players.map((p) => ({ b: p.batteries, alive: p.alive, s: shieldTotal(p) })),
+    players: game.players.map((p) => ({ b: p.batteries, alive: p.alive, s: shieldTotal(p), r: p.razoonium || 0 })),
   });
 }
 
@@ -85,6 +86,7 @@ function startGame(game) {
     ...p,
     color: COLORS[i],
     batteries: START_BATTERIES,
+    razoonium: 0,
     shields: [],
     alive: true,
     elimDay: null,
@@ -114,12 +116,12 @@ function resolveTurn(game, ordersByIdx) {
     if (o.atk > 0 && (o.atkTarget == null || !game.players[o.atkTarget]?.alive)) o.atk = 0;
     if (o.xfer > 0 && (o.xferTarget == null || !game.players[o.xferTarget]?.alive)) o.xfer = 0;
     if (spent(o) > p.batteries) Object.assign(o, emptyOrders());
-    C.set(id, { id, p, o, before: p.batteries, reserve: p.batteries - spent(o), genStake: o.gen, gains: 0, pact: false });
+    C.set(id, { id, p, o, before: p.batteries, reserve: p.batteries - spent(o), genStake: o.gen, refStake: o.ref, gains: 0, pact: false });
   });
 
   // 1. Coût de vie
   C.forEach((c) => (c.reserve -= 1));
-  lines.push('Coût de vie : −1 🔋 par dôme.');
+  lines.push('Coût de vie : −1 {i:battery} par dôme.');
 
   // 2. Météo
   const die = rand(1, 6);
@@ -129,22 +131,8 @@ function resolveTurn(game, ordersByIdx) {
   const pactMult = weather === 'abundance' ? 2.5 : 2;
   lines.push(`Météo (dé ${die}) : {w:${weather}} — ${WEATHER[weather].desc}.`);
 
-  // 3. Enchères
-  const bidders = [...C.values()].filter((c) => c.o.bid > 0)
-    .sort((a, b) => b.o.bid - a.o.bid || a.p.batteries - b.p.batteries);
-  if (!bidders.length && game.lots.length) lines.push('Enchères : aucune mise, les lots restent en réserve.');
-  bidders.forEach((c, i) => {
-    if (i < game.lots.length) {
-      c.reserve += game.lots[i];
-      lines.push(`Enchère : {p:${c.id}} remporte le lot n°${i + 1} (+${game.lots[i]}) pour une mise de ${c.o.bid}.`);
-    } else {
-      c.reserve += c.o.bid;
-      lines.push(`Enchère : {p:${c.id}} perd (mise de ${c.o.bid} remboursée).`);
-    }
-  });
-
-  // 4. Pactes : proposer un pacte interdit l'attaque et la défense ce tour (réciproque ou non) ;
-  //    seul un pacte réciproque booste la génération. Les boucliers existants restent actifs.
+  // 3. Pactes : proposer un pacte interdit l'attaque et la défense ce tour (réciproque ou non)
+  //    et rend ses boucliers inactifs ce tour ; seul un pacte réciproque booste la génération.
   C.forEach((c) => {
     const t = c.o.pact;
     if (t != null && C.has(t) && C.get(t).o.pact === c.id) c.pact = true;
@@ -160,10 +148,33 @@ function resolveTurn(game, ordersByIdx) {
     if (refund) lines.push(`{p:${c.id}} : ${refund} batterie(s) d'attaque/défense annulée(s) par le pacte.`);
   });
 
-  // Nouveaux boucliers (actifs dès ce tour)
+  // 4. Construction des boucliers (actifs dès ce tour)
   C.forEach((c) => { if (c.o.def > 0) c.p.shields.push({ amount: c.o.def, day }); });
 
-  // 5. Attaques
+  // 5. Enchères : lots de Razoonium crédités directement (imprenables),
+  //    mises perdantes remboursées dans la réserve (pillable)
+  const bidders = [...C.values()].filter((c) => c.o.bid > 0)
+    .sort((a, b) => b.o.bid - a.o.bid || a.p.batteries - b.p.batteries);
+  if (!bidders.length && game.lots.length) lines.push('Enchères : aucune mise, les lots restent en réserve.');
+  bidders.forEach((c, i) => {
+    if (i < game.lots.length) {
+      c.p.razoonium = (c.p.razoonium || 0) + game.lots[i];
+      lines.push(`Enchère : {p:${c.id}} remporte le lot n°${i + 1} (+${game.lots[i]} {i:razoonium}) pour une mise de ${c.o.bid}.`);
+    } else {
+      c.reserve += c.o.bid;
+      lines.push(`Enchère : {p:${c.id}} perd (mise de ${c.o.bid} remboursée).`);
+    }
+  });
+
+  // 6. Transferts : reçus dans la réserve du destinataire (pillable)
+  C.forEach((c) => {
+    if (c.o.xfer > 0) {
+      C.get(c.o.xferTarget).reserve += c.o.xfer;
+      lines.push(`{p:${c.id}} transfère ${c.o.xfer} {i:battery} à {p:${c.o.xferTarget}}.`);
+    }
+  });
+
+  // 7. Attaques
   const byTarget = new Map();
   C.forEach((c) => {
     if (c.o.atk > 0) {
@@ -174,42 +185,80 @@ function resolveTurn(game, ordersByIdx) {
   byTarget.forEach((atks, tid) => {
     const tc = C.get(tid);
     const A = atks.reduce((s, a) => s + a.o.atk, 0);
-    const absorbed = Math.min(A, shieldTotal(tc.p));
+    // Une cible qui propose un pacte n'a aucun bouclier actif ce tour (ses boucliers sont épargnés)
+    const exposed = tc.o.pact != null;
+    const shieldBefore = shieldTotal(tc.p);
+    const absorbed = exposed ? 0 : Math.min(A, shieldBefore);
     destroyShields(tc.p, absorbed);
     const net = A - absorbed;
     const netShares = prorata(net, atks.map((a) => a.o.atk));
-    // Pillage : d'abord la réserve libre, puis les batteries misées en génération
+    // Pillage : d'abord la réserve libre, puis la mise en génération, puis la mise en raffinage
     const free = Math.max(0, tc.reserve);
-    const steal = Math.min(net, free + tc.genStake);
+    const steal = Math.min(net, free + tc.genStake + tc.refStake);
     const fromReserve = Math.min(steal, free);
-    const fromGen = steal - fromReserve;
+    const fromGen = Math.min(steal - fromReserve, tc.genStake);
+    const fromRef = steal - fromReserve - fromGen;
     tc.reserve -= fromReserve;
     tc.genStake -= fromGen;
+    tc.refStake -= fromRef;
     const stealShares = prorata(steal, netShares);
     atks.forEach((a, i) => { a.gains += netShares[i] + stealShares[i]; });
-    const who = atks.map((a) => `{p:${a.id}} (${a.o.atk})`).join(' + ');
-    const genNote = fromGen ? ` (dont ${fromGen} sur sa génération)` : '';
-    lines.push(`Attaque de ${who} sur {p:${tid}} : ${absorbed} perdue(s) sur le bouclier, ${net} récupérée(s), +${steal} pillée(s)${genNote}.`);
+
+    // Journal : qui attaque, ce que fait le bouclier, ce que perd la cible, ce que gagne chaque attaquant
+    const T = `{p:${tid}}`;
+    lines.push(atks.length === 1
+      ? `{p:${atks[0].id}} attaque ${T} avec ${A} {i:battery}.`
+      : `${atks.map((a) => `{p:${a.id}} (${a.o.atk} {i:battery})`).join(', ').replace(/, ([^,]*)$/, ' et $1')} attaquent ensemble ${T}.`);
+    if (exposed) lines.push(`↳ Le bouclier de ${T} est inactif (pacte) : aucune protection.`);
+    else if (!shieldBefore) lines.push(`↳ ${T} n'a pas de bouclier.`);
+    else {
+      const stop = net ? '' : ' L\'attaque est entièrement stoppée.';
+      lines.push(`↳ Le bouclier de ${T} absorbe ${absorbed} {i:battery} d'attaque, perdues (bouclier ${shieldBefore} → ${shieldBefore - absorbed}).${stop}`);
+    }
+    if (steal) {
+      const parts = [
+        fromReserve && `${fromReserve} dans sa réserve`,
+        fromGen && `${fromGen} dans sa mise en génération`,
+        fromRef && `${fromRef} dans sa mise en raffinage`,
+      ].filter(Boolean);
+      const empty = steal < net ? ' Il n\'y avait rien de plus à prendre.' : '';
+      lines.push(`↳ ${T} se fait voler ${steal} {i:battery} : ${parts.join(', ')}.${empty}`);
+    } else if (net) {
+      lines.push(`↳ ${T} n'avait plus aucune batterie à voler.`);
+    }
+    atks.forEach((a, i) => {
+      if (!netShares[i]) return;
+      const loot = stealShares[i] ? ` et empoche ${stealShares[i]} {i:battery} volée(s)` : '';
+      lines.push(`↳ {p:${a.id}} récupère ${netShares[i]} {i:battery} d'attaque${loot}.`);
+    });
   });
 
-  // 6. Expiration des boucliers (actifs 3 tours : jour J, J+1, J+2)
+  // 8. Expiration des boucliers (actifs 3 tours : jour J, J+1, J+2)
   C.forEach((c) => {
     c.p.shields = c.p.shields.filter((l) => l.amount > 0 && day - l.day < SHIELD_DURATION - 1);
   });
 
-  // 7. Récoltes & réceptions (génération calculée sur la mise restante après pillage)
+  // 9. Génération & raffinage, calculés sur les mises restantes après pillage
+  //    (une fois raffiné, le Razoonium est définitif et imprenable)
   C.forEach((c) => {
+    if (c.o.ref > 0) {
+      c.p.razoonium = (c.p.razoonium || 0) + c.refStake;
+      const lost = c.o.ref - c.refStake;
+      const lostNote = lost ? ` (mise de ${c.o.ref}, dont ${lost} volée(s))` : '';
+      lines.push(c.refStake
+        ? `{p:${c.id}} raffine ${c.refStake} {i:battery} en ${c.refStake} {i:razoonium} Razoonium${lostNote}.`
+        : `{p:${c.id}} ne raffine rien : ses ${c.o.ref} {i:battery} misées ont toutes été volées.`);
+    }
     if (c.o.gen > 0) {
       const mult = c.pact ? pactMult : genMult;
       const y = Math.floor(c.genStake * mult);
       c.gains += y;
       const lost = c.o.gen - c.genStake;
-      const lostNote = lost ? `, ${lost} pillée(s) sur ${c.o.gen}` : '';
-      lines.push(`{p:${c.id}} génère ${y} 🔋 (${c.genStake} × ${String(mult).replace('.', ',')}${lostNote}).`);
-    }
-    if (c.o.xfer > 0) {
-      C.get(c.o.xferTarget).gains += c.o.xfer;
-      lines.push(`{p:${c.id}} transfère ${c.o.xfer} 🔋 à {p:${c.o.xferTarget}}.`);
+      const m = String(mult).replace('.', ',');
+      const calc = lost ? `mise de ${c.o.gen}, dont ${lost} volée(s) : ${c.genStake} × ${m}` : `${c.genStake} × ${m}`;
+      lines.push(c.genStake
+        ? `{p:${c.id}} génère ${y} {i:battery} (${calc}).`
+        : `{p:${c.id}} ne génère rien : ses ${c.o.gen} {i:battery} misées ont toutes été volées.`);
     }
   });
 
@@ -221,7 +270,7 @@ function resolveTurn(game, ordersByIdx) {
       c.p.alive = false;
       c.p.shields = [];
       c.p.elimDay = day;
-      lines.push(`☠ Le dôme de {p:${c.id}} s'éteint.`);
+      lines.push(`{i:dead} Le dôme de {p:${c.id}} s'éteint.`);
     }
     bilan.push({ id: c.id, before: c.before, after: c.p.batteries });
   });
@@ -246,8 +295,8 @@ function resolveTurn(game, ordersByIdx) {
 function ranking(game) {
   return game.players
     .map((p, id) => ({ id, p }))
-    .sort((a, b) => (b.p.alive - a.p.alive) || b.p.batteries - a.p.batteries
-      || shieldTotal(b.p) - shieldTotal(a.p) || (b.p.elimDay || 0) - (a.p.elimDay || 0))
+    .sort((a, b) => (b.p.alive - a.p.alive) || (b.p.razoonium || 0) - (a.p.razoonium || 0)
+      || b.p.batteries - a.p.batteries || shieldTotal(b.p) - shieldTotal(a.p) || (b.p.elimDay || 0) - (a.p.elimDay || 0))
     .map((x) => x.id);
 }
 
