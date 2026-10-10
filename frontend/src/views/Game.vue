@@ -14,10 +14,30 @@
         <div class="codebox" title="Copier / partager" @click="share">{{ g.code }}</div>
         <div class="ptitle">Dômes connectés <span class="tag">{{ g.players.length }}/{{ g.maxPlayers }}</span></div>
         <div class="plist" style="flex-direction:column;margin-bottom:20px">
-          <div v-for="(p, i) in g.players" :key="p.uid" class="pcard" :style="{ '--c': COLORS[i] }">
+          <div
+            v-for="(p, i) in g.players" :key="p.uid"
+            :class="['pcard', { me: i === g.me }]" :style="{ '--c': p.color || g.palette[i] }"
+          >
             <span class="bar" />
-            <span class="nm">{{ p.name }}</span>
+            <span class="nm"><v-icon v-if="p.icon" class="mi emb" size="1.1em" :icon="p.icon" /> {{ p.name }}</span>
             <span v-if="p.uid === g.hostId" class="status lobby">HÔTE</span>
+          </div>
+        </div>
+        <div class="ptitle">Ton dôme</div>
+        <div class="look" :style="{ '--c': me.color }">
+          <div class="swatches">
+            <button
+              v-for="c in freeColors" :key="c"
+              :class="['swatch', { on: c === me.color }]" :style="{ '--s': c }" :title="c"
+              :disabled="busy" @click="setLook({ color: c })"
+            />
+          </div>
+          <div class="emblems">
+            <button
+              v-for="e in freeEmblems" :key="e"
+              :class="['emblem', { on: e === me.icon }]"
+              :disabled="busy" @click="setLook({ icon: e })"
+            ><v-icon :icon="e" /></button>
           </div>
         </div>
         <div style="display:flex;gap:10px;flex-wrap:wrap">
@@ -57,19 +77,6 @@
             </div>
           </div>
         </div>
-        <div class="infobox">
-          <template v-if="g.lastWeather">
-            <v-icon class="ico" :color="WEATHER[g.lastWeather.weather].color" :icon="WEATHER[g.lastWeather.weather].icon" />
-            <div>
-              <div class="lbl">MÉTÉO J{{ g.day - 1 }} · DÉ {{ g.lastWeather.die }}</div>
-              <div class="val" :style="{ color: WEATHER[g.lastWeather.weather].color }">{{ WEATHER[g.lastWeather.weather].label }}</div>
-            </div>
-          </template>
-          <template v-else>
-            <span class="ico muted">?</span>
-            <div><div class="lbl">MÉTÉO</div><div class="val">Tirée à la résolution</div></div>
-          </template>
-        </div>
       </div>
 
       <Teleport to="#subnav">
@@ -88,19 +95,22 @@
         <!-- Console -->
         <section class="panel">
           <div class="chead" :style="{ '--c': me.color }">
-            <div class="avatar">{{ (me.name[0] || '?').toUpperCase() }}</div>
+            <div class="avatar">
+              <v-icon v-if="me.icon" :icon="me.icon" size="20" />
+              <template v-else>{{ (me.name[0] || '?').toUpperCase() }}</template>
+            </div>
             <div class="who">
-              <div class="lbl">COMMANDANT {{ String(g.me + 1).padStart(2, '0') }} · {{ consoleState }}</div>
+              <div class="lbl">COMMANDANT</div>
               <h2>{{ me.name }}</h2>
+            </div>
+            <div class="score" title="Score · imprenable">
+              <div class="k"><v-icon class="mi" size="1.1em" :icon="ICONS.razoonium" /> Razoonium</div>
+              <div class="v teal">{{ me.razoonium || 0 }}</div>
             </div>
           </div>
 
+          <div class="zone-title">Ressources</div>
           <div class="stats">
-            <div class="stat">
-              <div class="k"><v-icon class="mi" size="1.1em" :icon="ICONS.razoonium" /> Razoonium</div>
-              <div class="v teal">{{ me.razoonium || 0 }}</div>
-              <div class="s">score · imprenable</div>
-            </div>
             <div class="stat">
               <div class="k"><v-icon class="mi" size="1.1em" :icon="ICONS.battery" /> Batteries</div>
               <div class="v lime">{{ me.batteries }}</div>
@@ -132,7 +142,7 @@
             <div class="rank">
               <div v-for="(id, i) in g.ranking" :key="id" :class="{ dead: !g.players[id].alive }">
                 <span class="pos">#{{ i + 1 }}</span>
-                <span :style="{ color: g.players[id].color, fontWeight: 700 }">{{ g.players[id].name }}</span>
+                <span :style="{ color: g.players[id].color, fontWeight: 700 }"><v-icon v-if="g.players[id].icon" class="mi" size="1em" :icon="g.players[id].icon" /> {{ g.players[id].name }}</span>
                 <span class="num teal"><v-icon class="mi" size="1.1em" :icon="ICONS.razoonium" /> {{ g.players[id].razoonium || 0 }}</span>
                 <template v-if="g.players[id].alive">
                   <span class="num"><v-icon class="mi" size="1.1em" :icon="ICONS.battery" /> {{ g.players[id].batteries }}</span>
@@ -147,6 +157,7 @@
 
           <!-- Ordres -->
           <template v-else>
+            <div class="zone-title orders">Ordres du tour</div>
             <div class="tiles">
               <button
                 v-for="a in ACTIONS" :key="a.key"
@@ -180,17 +191,30 @@
                   <div class="val">{{ draft[current.key] }}</div>
                   <button :disabled="!editable || remaining <= 0" @click="step(current.key, 1, $event)">+</button>
                 </div>
-                <select v-if="current.target" v-model="draft[current.target]" :disabled="!editable" @change="onTargetChange(current)">
-                  <option :value="null">— Cible —</option>
-                  <option v-for="o in others" :key="o.id" :value="o.id">
-                    {{ o.p.name }} · 🔋{{ o.p.batteries }} 🛡{{ shieldTotal(o.p) }}
-                  </option>
-                </select>
+                <div v-if="current.target" class="targets">
+                  <button
+                    v-for="o in others" :key="o.id"
+                    :class="['target', { on: draft[current.target] === o.id }]" :style="{ '--c': o.p.color }"
+                    :disabled="!editable" @click="pickTarget(current, o.id)"
+                  >
+                    <span class="tn"><v-icon v-if="o.p.icon" class="mi" size="1em" :icon="o.p.icon" /> {{ o.p.name }}</span>
+                    <span class="ts">
+                      <v-icon class="mi" size="1em" :icon="ICONS.battery" /> {{ o.p.batteries }}
+                      <v-icon class="mi" size="1em" :icon="ICONS.shield" /> {{ shieldTotal(o.p) }}
+                    </span>
+                  </button>
+                </div>
                 <div class="pv">{{ preview(current.key) }}</div>
                 <div class="mfoot">
                   <span class="muted">Disponibles : <b class="lime">{{ remaining }}</b> <v-icon class="mi" size="1.1em" :icon="ICONS.battery" /></span>
                   <span v-if="!editable" class="muted">Ordres verrouillés</span>
-                  <button class="btn primary" @click="openKey = null">OK</button>
+                  <div style="display:flex;gap:8px">
+                    <button
+                      v-if="editable && current.target && draft[current.target] != null"
+                      class="btn ghost" @click="abandon(current)"
+                    ><v-icon size="16">mdi-close-circle-outline</v-icon> Abandonner</button>
+                    <button class="btn primary" @click="openKey = null">OK</button>
+                  </div>
                 </div>
               </div>
             </v-dialog>
@@ -224,7 +248,7 @@
               <span class="pos">#{{ i + 1 }}</span>
               <span class="who-cell">
                 <span :style="{ color: g.players[id].color, fontWeight: 700 }">
-                  {{ g.players[id].name }}<span v-if="id === g.me" class="muted"> (toi)</span>
+                  <v-icon v-if="g.players[id].icon" class="mi" size="1em" :icon="g.players[id].icon" /> {{ g.players[id].name }}<span v-if="id === g.me" class="muted"> (toi)</span>
                 </span>
                 <span
                   v-if="g.status === 'running' && g.players[id].alive"
@@ -312,7 +336,6 @@ import { ACTIONS, WEATHER, ICONS, emptyOrders, spent, shieldTotal, timeLeft } fr
 import EvolutionChart from '../components/EvolutionChart.vue';
 import LogLine from '../components/LogLine.vue';
 
-const COLORS = ['#00f0ff', '#ff2bd6', '#9dff4a', '#ffb020', '#8a7dff', '#ff5470', '#2bffc6', '#f2f6ff'];
 const POLL_MS = 15000;
 const TABS = [
   { key: 'ordres', label: 'Ordres', icon: 'mdi-console-line' },
@@ -341,6 +364,10 @@ const now = ref(Date.now());
 
 const isHost = computed(() => g.value?.hostId === auth.user?.id);
 const me = computed(() => g.value.players[g.value.me]);
+// Couleurs et emblèmes encore libres (les miens inclus)
+const takenBy = (key) => g.value.players.filter((_, i) => i !== g.value.me).map((p) => p[key]);
+const freeColors = computed(() => g.value.palette.filter((c) => !takenBy('color').includes(c)));
+const freeEmblems = computed(() => g.value.emblems.filter((e) => !takenBy('icon').includes(e)));
 const alive = computed(() => g.value.players.filter((p) => p.alive));
 const readyCount = computed(() => g.value.players.filter((p, i) => p.alive && g.value.ready[i]).length);
 const used = computed(() => spent(draft.value));
@@ -393,6 +420,8 @@ async function load() {
     if (!g.value) router.replace('/');
   }
 }
+
+const setLook = (look) => call(() => api.put(`/games/${props.id}/look`, look));
 
 async function call(request, success) {
   busy.value = true;
@@ -469,7 +498,8 @@ async function share() {
 // Proposer un pacte interdit l'attaque et la défense ce tour, réciproque ou non
 const blockedByPact = (a) => draft.value.pact != null && (a.key === 'atk' || a.key === 'def');
 
-function onTargetChange(a) {
+function pickTarget(a, id) {
+  draft.value[a.target] = id;
   dirty.value = true;
   const o = draft.value;
   if (a.key === 'pact' && o.pact != null && (o.atk || o.def)) {
@@ -478,6 +508,13 @@ function onTargetChange(a) {
     o.atkTarget = null;
     toast('Pacte : attaque et défense retirées');
   }
+}
+
+// Annule l'action ciblée : cible et mise
+function abandon(a) {
+  draft.value[a.target] = null;
+  if (!a.noAmount) draft.value[a.key] = 0;
+  dirty.value = true;
 }
 
 const isOn = (a) => (a.noAmount ? draft.value.pact != null : draft.value[a.key] > 0);

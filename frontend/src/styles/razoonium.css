@@ -213,21 +213,43 @@ select option{background:#0a1226}
 .pcard .nm{font-weight:700;font-size:17px;line-height:1.1}
 .pcard .meta{font-size:13px;color:var(--muted);display:flex;gap:10px;margin-top:2px}
 .pcard .meta b{color:var(--text);font-weight:600}
+.pcard .emb{color:var(--c)}
+
+/* Choix couleur / emblème (lobby) */
+.look{display:flex;flex-direction:column;gap:12px;margin-bottom:20px}
+.swatches{display:flex;flex-wrap:wrap;gap:8px}
+.swatch{width:30px;height:30px;padding:0;cursor:pointer;background:var(--s);border:2px solid transparent;
+  outline:1px solid rgba(255,255,255,.12);transition:.15s}
+.swatch:hover:not(:disabled){box-shadow:0 0 10px var(--s)}
+.swatch.on{border-color:#050a18;outline:2px solid var(--s);box-shadow:0 0 14px var(--s)}
+.emblems{display:grid;grid-template-columns:repeat(auto-fill,minmax(40px,1fr));gap:6px}
+.emblem{aspect-ratio:1;display:grid;place-items:center;padding:0;cursor:pointer;font-size:20px;color:var(--muted);
+  background:rgba(255,255,255,.02);border:1px solid rgba(255,255,255,.08);transition:.15s}
+.emblem:hover:not(:disabled){color:var(--c);border-color:color-mix(in srgb, var(--c) 50%, transparent)}
+.emblem.on{color:var(--c);border-color:var(--c);background:color-mix(in srgb, var(--c) 15%, transparent);box-shadow:0 0 12px color-mix(in srgb, var(--c) 35%, transparent)}
 
 /* ---------- Console ---------- */
-.chead{display:flex;align-items:center;gap:16px;flex-wrap:wrap}
+.chead{display:flex;align-items:center;gap:12px}
 .avatar{
-  width:64px;height:64px;flex:none;display:grid;place-items:center;
-  font-family:'Orbitron';font-weight:900;font-size:26px;color:var(--c);
-  border:2px solid var(--c);box-shadow:0 0 18px color-mix(in srgb, var(--c) 50%, transparent), inset 0 0 18px color-mix(in srgb, var(--c) 30%, transparent);
-  clip-path:polygon(25% 0,75% 0,100% 50%,75% 100%,25% 100%,0 50%);
-  background:rgba(0,0,0,.4);
+  --hex:polygon(25% 0,75% 0,100% 50%,75% 100%,25% 100%,0 50%);
+  position:relative;isolation:isolate;
+  width:42px;height:36px;flex:none;display:grid;place-items:center;
+  font-family:'Orbitron';font-weight:900;font-size:17px;color:var(--c);
+  filter:drop-shadow(0 0 5px color-mix(in srgb, var(--c) 40%, transparent));
 }
-.chead .who{flex:1;min-width:160px}
-.chead .who .lbl{font-family:'Orbitron';font-size:10px;letter-spacing:.35em;color:var(--muted)}
-.chead .who h2{margin:2px 0 0;font-size:26px;color:var(--c);text-shadow:0 0 14px color-mix(in srgb, var(--c) 60%, transparent);word-break:break-word}
+.avatar::before,.avatar::after{content:'';position:absolute;clip-path:var(--hex);z-index:-1}
+.avatar::before{inset:0;background:var(--c)}
+.avatar::after{inset:1.5px;background:#050a18}
+.chead .who{flex:1;min-width:0}
+.chead .who .lbl{font-family:'Orbitron';font-size:9px;letter-spacing:.25em;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.chead .who h2{margin:1px 0 0;font-size:20px;line-height:1.1;color:var(--c);text-shadow:0 0 10px color-mix(in srgb, var(--c) 45%, transparent);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.chead .score{flex:none;text-align:right;padding:8px 14px 10px;min-width:120px;
+  border:1px solid rgba(43,255,198,.45);background:linear-gradient(135deg, rgba(43,255,198,.12), rgba(43,255,198,.02));
+  box-shadow:0 0 14px rgba(43,255,198,.15), inset 0 0 14px rgba(43,255,198,.06)}
+.chead .score .k{font-family:'Orbitron';font-size:9px;letter-spacing:.25em;color:#2bffc6;text-transform:uppercase}
+.chead .score .v{font-family:'Orbitron';font-weight:700;font-size:32px;line-height:1;margin-top:2px}
 
-.stats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin-top:16px}
+.stats{display:grid;grid-template-columns:minmax(0,2fr) minmax(0,1fr);gap:12px;margin-top:16px}
 .stat{padding:12px 14px;border:1px solid var(--line);background:var(--panel-2);min-width:0}
 .stat .k{font-family:'Orbitron';font-size:9px;letter-spacing:.25em;color:var(--muted);text-transform:uppercase}
 .stat .v{font-family:'Orbitron';font-weight:700;font-size:28px;margin-top:4px;line-height:1}
@@ -269,7 +291,12 @@ select option{background:#0a1226}
 .acard .pv{font-size:13px;color:var(--a);min-height:17px}
 
 /* Tuiles d'action (ouvrent une modale) */
-.tiles{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:12px;margin-top:18px}
+.zone-title{font-family:'Orbitron';font-size:11px;letter-spacing:.3em;color:var(--muted);text-transform:uppercase;
+  display:flex;align-items:center;gap:12px;margin:22px 0 -4px}
+.zone-title::after{content:'';flex:1;height:1px;background:linear-gradient(90deg, var(--line), transparent)}
+.zone-title.orders{margin-top:32px;padding-top:22px;border-top:1px solid var(--line)}
+.tiles{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin-top:18px}
+.tiles .tile:last-child:nth-child(3n+1){grid-column:2}
 .tile{
   --a:var(--cyan);
   position:relative;display:flex;flex-direction:column;align-items:center;gap:8px;min-width:0;
@@ -295,6 +322,15 @@ select option{background:#0a1226}
 .acard.modal .ds{min-height:0;font-size:16px}
 .acard.modal .stepper .val{font-size:28px;padding:10px 0}
 .acard.modal .stepper{grid-template-columns:56px 1fr 56px}
+.targets{display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:8px}
+.target{display:flex;flex-direction:column;align-items:flex-start;gap:2px;min-width:0;padding:8px 10px;cursor:pointer;
+  font-family:inherit;color:var(--text);text-align:left;background:rgba(255,255,255,.02);
+  border:1px solid color-mix(in srgb, var(--c) 30%, transparent);border-left:3px solid var(--c);transition:.15s}
+.target:hover:not(:disabled){border-color:var(--c)}
+.target.on{border-color:var(--a);background:color-mix(in srgb, var(--a) 18%, transparent);box-shadow:0 0 12px color-mix(in srgb, var(--a) 35%, transparent)}
+.target:disabled{cursor:not-allowed;opacity:.6}
+.target .tn{font-weight:700;color:var(--c);max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.target .ts{font-size:12px;color:var(--muted)}
 .mfoot{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-top:4px}
 .mfoot .lime{color:var(--lime)}
 
@@ -357,7 +393,6 @@ select option{background:#0a1226}
 /* ---------- Responsive ---------- */
 @media (max-width:1250px){
   .actions{grid-template-columns:repeat(2,minmax(0,1fr))}
-  .tiles{grid-template-columns:repeat(4,minmax(0,1fr))}
 }
 @media (max-width:860px){
   .top-row{padding:10px 16px;gap:10px}

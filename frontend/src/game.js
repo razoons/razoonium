@@ -18,13 +18,13 @@ export const WEATHER = {
 };
 
 export const ACTIONS = [
-  { key: 'gen',  name: 'Générer',    icon: 'mdi-atom',             tag: 'Soi-même',   color: '#9dff4a', desc: 'Dépense X → rapporte ⌊X × 1,5⌋ en fin de tour (pillable).' },
+  { key: 'gen',  name: 'Générer',    icon: 'mdi-atom',             tag: 'Soi-même',   color: '#9dff4a', desc: 'Dépense X → rapporte (X × 1,5) en fin de tour (pillable).' },
   { key: 'def',  name: 'Défendre',   icon: 'mdi-shield-outline',    tag: 'Soi-même',   color: '#00f0ff', desc: 'Dépense X → X points de Bouclier actifs 3 tours.' },
+  { key: 'ref',  name: 'Raffiner',   icon: 'mdi-flask-outline',     tag: 'Score',      color: '#2bffc6', desc: 'Convertit X batteries en Razoonium en fin de tour. Mise pillable, Razoonium acquis imprenable.' },
   { key: 'atk',  name: 'Attaquer',   icon: 'mdi-sword',             tag: 'Un joueur',  color: '#ff4d6d', target: 'atkTarget', desc: 'Perce le Bouclier. Le surplus revient et vole autant.' },
   { key: 'pact', name: 'Pacte',      icon: 'mdi-handshake-outline', tag: 'Un joueur',  color: '#8a7dff', target: 'pact', noAmount: true, desc: 'Ni Attaque ni Défense, et tes Boucliers sont inactifs ce tour. Si réciproque : Génération ×2.' },
   { key: 'xfer', name: 'Transférer', icon: 'mdi-swap-horizontal',   tag: 'Un joueur',  color: '#ffb020', target: 'xferTarget', desc: 'Envoie X batteries, reçues avant les attaques (pillables).' },
   { key: 'bid',  name: 'Enchère',    icon: 'mdi-gavel',             tag: 'La réserve', color: '#ff2bd6', desc: 'Mise secrète. Gagnant : paie. Perdant : remboursé.' },
-  { key: 'ref',  name: 'Raffiner',   icon: 'mdi-flask-outline',     tag: 'Score',      color: '#2bffc6', desc: 'Convertit X batteries en Razoonium en fin de tour. Mise pillable, Razoonium acquis imprenable.' },
 ];
 
 export const emptyOrders = () => ({ gen: 0, def: 0, atk: 0, atkTarget: null, pact: null, xfer: 0, xferTarget: null, bid: 0, ref: 0 });

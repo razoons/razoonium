@@ -6,7 +6,26 @@ const START_BATTERIES = 10;
 const SHIELD_DURATION = 3;
 const MAX_PLAYERS = 8;
 
-const COLORS = ['#00f0ff', '#ff2bd6', '#9dff4a', '#ffb020', '#8a7dff', '#ff5470', '#2bffc6', '#f2f6ff'];
+const COLORS = [
+  '#00f0ff', '#80d8ff', '#3d7bff', '#8a7dff', '#c45bff', '#ff2bd6', '#ff8fc8', '#ff5470', '#ff2a2a',
+  '#ff6a00', '#ffb020', '#ffe53b', '#9dff4a', '#2bd96b', '#2bffc6', '#c9a27a', '#8f9bb3', '#f2f6ff',
+];
+
+// Emblèmes : noms d'icônes Material Design Icons (@mdi/font)
+const EMBLEMS = [
+  'mdi-rocket-launch', 'mdi-alien', 'mdi-robot', 'mdi-ufo', 'mdi-satellite-variant', 'mdi-meteor',
+  'mdi-orbit', 'mdi-atom-variant', 'mdi-radioactive', 'mdi-biohazard', 'mdi-skull', 'mdi-ghost',
+  'mdi-spider', 'mdi-snake', 'mdi-bat', 'mdi-jellyfish', 'mdi-crown',
+  'mdi-diamond-stone', 'mdi-lightning-bolt', 'mdi-fire', 'mdi-crystal-ball',
+];
+
+/* Première couleur et premier emblème non pris par les joueurs donnés */
+function freeLook(players) {
+  return {
+    color: COLORS.find((c) => !players.some((p) => p.color === c)),
+    icon: EMBLEMS.find((e) => !players.some((p) => p.icon === e)),
+  };
+}
 
 const WEATHER = {
   calm:      { label: 'Calme',     desc: 'Aucun effet' },
@@ -82,9 +101,13 @@ function snapshot(game) {
 
 /* Initialise l'état de jeu à partir des membres du lobby */
 function startGame(game) {
-  game.players = game.players.map((p, i) => ({
+  // Les joueurs arrivés avant le choix de couleur/emblème reçoivent les premiers libres
+  for (const p of game.players) {
+    if (!p.color) p.color = freeLook(game.players).color;
+    if (!p.icon) p.icon = freeLook(game.players).icon;
+  }
+  game.players = game.players.map((p) => ({
     ...p,
-    color: COLORS[i],
     batteries: START_BATTERIES,
     razoonium: 0,
     shields: [],
@@ -301,6 +324,6 @@ function ranking(game) {
 }
 
 module.exports = {
-  MAX_DAYS, START_BATTERIES, SHIELD_DURATION, MAX_PLAYERS, COLORS,
+  MAX_DAYS, START_BATTERIES, SHIELD_DURATION, MAX_PLAYERS, COLORS, EMBLEMS, freeLook,
   emptyOrders, sanitizeOrders, startGame, resolveTurn, shieldTotal, prorata,
 };

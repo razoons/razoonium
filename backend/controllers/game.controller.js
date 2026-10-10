@@ -21,6 +21,10 @@ async function leave(req, res) {
   res.status(204).end();
 }
 
+async function look(req, res) {
+  res.json(await games.setLook(req.user, req.params.id, req.body || {}));
+}
+
 async function remove(req, res) {
   await games.deleteGame(req.user, req.params.id);
   res.status(204).end();
@@ -39,4 +43,4 @@ async function tick(_req, res) {
   res.json(await games.tick());
 }
 
-module.exports = { list, create, join, get, leave, remove, start, orders, tick };
+module.exports = { list, create, join, get, leave, look, remove, start, orders, tick };

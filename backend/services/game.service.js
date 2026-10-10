@@ -37,6 +37,8 @@ function viewFor(game, id, uid, ordersDocs) {
     maxPlayers: engine.MAX_PLAYERS,
     maxDays: engine.MAX_DAYS,
     shieldDuration: engine.SHIELD_DURATION,
+    palette: engine.COLORS,
+    emblems: engine.EMBLEMS,
     players: game.players,
     day: game.day ?? 0,
     lots: game.lots ?? [],
@@ -209,7 +211,7 @@ async function createGame(user, { name, turnHours, earlyResolve }) {
     turnHours: hours,
     earlyResolve: earlyResolve !== false,
     playerIds: [user.uid],
-    players: [{ uid: user.uid, name: user.name }],
+    players: [{ uid: user.uid, name: user.name, ...engine.freeLook([]) }],
     createdAt: new Date(),
   };
   await ref.set(game);
@@ -226,7 +228,7 @@ async function joinGame(user, code) {
     if (game.status !== 'lobby') throw new GameError(409, 'La partie a déjà commencé.');
     if (game.players.length >= engine.MAX_PLAYERS) throw new GameError(409, 'La partie est complète.');
     game.playerIds.push(user.uid);
-    game.players.push({ uid: user.uid, name: user.name });
+    game.players.push({ uid: user.uid, name: user.name, ...engine.freeLook(game.players) });
     tx.update(ref, { playerIds: game.playerIds, players: game.players });
   });
   return loadView(ref, user.uid);
@@ -245,6 +247,32 @@ async function leaveGame(user, id) {
       players: game.players.filter((p) => p.uid !== user.uid),
     });
   });
+}
+
+/* Choix de la couleur et/ou de l'emblème dans le lobby (uniques dans la partie) */
+async function setLook(user, id, { color, icon } = {}) {
+  const ref = games().doc(id);
+  await db.runTransaction(async (tx) => {
+    const snap = await tx.get(ref);
+    if (!snap.exists) throw new GameError(404, 'Partie introuvable.');
+    const game = snap.data();
+    const me = game.players.find((p) => p.uid === user.uid);
+    if (!me) throw new GameError(403, 'Tu ne fais pas partie de cette partie.');
+    if (game.status !== 'lobby') throw new GameError(409, 'La partie a déjà commencé.');
+    const others = game.players.filter((p) => p !== me);
+    if (color !== undefined) {
+      if (!engine.COLORS.includes(color)) throw new GameError(400, 'Couleur invalide.');
+      if (others.some((p) => p.color === color)) throw new GameError(409, 'Couleur déjà prise.');
+      me.color = color;
+    }
+    if (icon !== undefined) {
+      if (!engine.EMBLEMS.includes(icon)) throw new GameError(400, 'Emblème invalide.');
+      if (others.some((p) => p.icon === icon)) throw new GameError(409, 'Emblème déjà pris.');
+      me.icon = icon;
+    }
+    tx.update(ref, { players: game.players });
+  });
+  return loadView(ref, user.uid);
 }
 
 /* L'hôte supprime définitivement la partie, quel que soit son état (ordres compris) */
@@ -328,5 +356,5 @@ async function tick() {
 }
 
 module.exports = {
-  GameError, listMyGames, createGame, joinGame, leaveGame, deleteGame, launchGame, getGame, submitOrders, tick,
+  GameError, listMyGames, createGame, joinGame, leaveGame, setLook, deleteGame, launchGame, getGame, submitOrders, tick,
 };
