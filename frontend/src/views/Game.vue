@@ -7,7 +7,7 @@
       <div class="panel" style="padding:24px">
         <h1 class="hero-title" style="font-size:24px">{{ g.name }}</h1>
         <p class="sub">
-          Tours de {{ g.turnHours }}h · {{ g.minPlayers }} à {{ g.maxPlayers }} dômes
+          {{ g.maxDays }} tours de {{ g.turnHours }}h · {{ g.minPlayers }} à {{ g.maxPlayers }} dômes
           <template v-if="g.earlyResolve"> · résolution anticipée</template>
         </p>
         <div class="ptitle">Code d'accès</div>
@@ -16,30 +16,32 @@
         <div class="plist" style="flex-direction:column;margin-bottom:20px">
           <div
             v-for="(p, i) in g.players" :key="p.uid"
-            :class="['pcard', { me: i === g.me }]" :style="{ '--c': p.color || g.palette[i] }"
+            :class="['pcard', { me: i === g.me }]" :style="{ '--c': p.color || g.palette?.[i] }"
           >
             <span class="bar" />
             <span class="nm"><v-icon v-if="p.icon" class="mi emb" size="1.1em" :icon="p.icon" /> {{ p.name }}</span>
             <span v-if="p.uid === g.hostId" class="status lobby">HÔTE</span>
           </div>
         </div>
-        <div class="ptitle">Ton dôme</div>
-        <div class="look" :style="{ '--c': me.color }">
-          <div class="swatches">
-            <button
-              v-for="c in freeColors" :key="c"
-              :class="['swatch', { on: c === me.color }]" :style="{ '--s': c }" :title="c"
-              :disabled="busy" @click="setLook({ color: c })"
-            />
+        <template v-if="g.palette">
+          <div class="ptitle">Ton dôme</div>
+          <div class="look" :style="{ '--c': me.color }">
+            <div class="swatches">
+              <button
+                v-for="c in freeColors" :key="c"
+                :class="['swatch', { on: c === me.color }]" :style="{ '--s': c }" :title="c"
+                :disabled="busy" @click="setLook({ color: c })"
+              />
+            </div>
+            <div class="emblems">
+              <button
+                v-for="e in freeEmblems" :key="e"
+                :class="['emblem', { on: e === me.icon }]"
+                :disabled="busy" @click="setLook({ icon: e })"
+              ><v-icon :icon="e" /></button>
+            </div>
           </div>
-          <div class="emblems">
-            <button
-              v-for="e in freeEmblems" :key="e"
-              :class="['emblem', { on: e === me.icon }]"
-              :disabled="busy" @click="setLook({ icon: e })"
-            ><v-icon :icon="e" /></button>
-          </div>
-        </div>
+        </template>
         <div style="display:flex;gap:10px;flex-wrap:wrap">
           <button class="btn danger" style="flex:1" @click="leave">{{ isHost ? 'Dissoudre' : 'Quitter' }}</button>
           <button
@@ -206,9 +208,9 @@
                 </div>
                 <div class="pv">{{ preview(current.key) }}</div>
                 <div class="mfoot">
-                  <span class="muted">Disponibles : <b class="lime">{{ remaining }}</b> <v-icon class="mi" size="1.1em" :icon="ICONS.battery" /></span>
+                  <span v-if="!current.noAmount" class="muted">Disponibles : <b class="lime">{{ remaining }}</b> <v-icon class="mi" size="1.1em" :icon="ICONS.battery" /></span>
                   <span v-if="!editable" class="muted">Ordres verrouillés</span>
-                  <div style="display:flex;gap:8px">
+                  <div style="display:flex;gap:8px;margin-left:auto">
                     <button
                       v-if="editable && current.target && draft[current.target] != null"
                       class="btn ghost" @click="abandon(current)"
@@ -366,8 +368,8 @@ const isHost = computed(() => g.value?.hostId === auth.user?.id);
 const me = computed(() => g.value.players[g.value.me]);
 // Couleurs et emblèmes encore libres (les miens inclus)
 const takenBy = (key) => g.value.players.filter((_, i) => i !== g.value.me).map((p) => p[key]);
-const freeColors = computed(() => g.value.palette.filter((c) => !takenBy('color').includes(c)));
-const freeEmblems = computed(() => g.value.emblems.filter((e) => !takenBy('icon').includes(e)));
+const freeColors = computed(() => (g.value.palette || []).filter((c) => !takenBy('color').includes(c)));
+const freeEmblems = computed(() => (g.value.emblems || []).filter((e) => !takenBy('icon').includes(e)));
 const alive = computed(() => g.value.players.filter((p) => p.alive));
 const readyCount = computed(() => g.value.players.filter((p, i) => p.alive && g.value.ready[i]).length);
 const used = computed(() => spent(draft.value));

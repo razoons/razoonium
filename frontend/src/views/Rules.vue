@@ -13,7 +13,7 @@
       <div class="panel">
         <div class="ptitle">01 · But du jeu</div>
         <ul>
-          <li>La partie dure <b>15 jours</b> (15 tours).</li>
+          <li>La partie dure <b>15 jours</b> (15 tours) par défaut ; le créateur peut choisir de 5 à 30 tours.</li>
           <li>À la fin, le joueur qui possède le plus de <b class="teal">Razoonium</b> gagne.</li>
           <li>Les dômes encore allumés passent <b>toujours devant</b> les dômes éteints, quel que soit leur Razoonium.</li>
           <li>Si un seul dôme reste allumé avant la fin, la partie s'arrête et ce joueur gagne.</li>

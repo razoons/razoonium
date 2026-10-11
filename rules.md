@@ -6,7 +6,7 @@ Un jeu de stratégie au tour par tour pour **4 à 8 joueurs**. Chaque joueur dir
 
 ## 🎯 1. Le But du Jeu
 
-- La partie dure **15 jours** (15 tours).
+- La partie dure **15 jours** (15 tours) par défaut ; le créateur peut choisir de 5 à 30 tours.
 - À la fin, le joueur qui possède **le plus de Razoonium** gagne.
 - Les dômes encore allumés passent **toujours devant** les dômes éteints, quel que soit leur Razoonium.
 - Si un seul dôme reste allumé avant la fin, la partie s'arrête immédiatement et ce joueur gagne.

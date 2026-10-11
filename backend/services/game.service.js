@@ -35,7 +35,7 @@ function viewFor(game, id, uid, ordersDocs) {
     earlyResolve: game.earlyResolve,
     minPlayers: MIN_PLAYERS,
     maxPlayers: engine.MAX_PLAYERS,
-    maxDays: engine.MAX_DAYS,
+    maxDays: game.maxDays ?? engine.MAX_DAYS,
     shieldDuration: engine.SHIELD_DURATION,
     palette: engine.COLORS,
     emblems: engine.EMBLEMS,
@@ -62,6 +62,7 @@ function summaryFor(game, id, uid) {
     name: game.name,
     status: game.status,
     day: game.day ?? 0,
+    maxDays: game.maxDays ?? engine.MAX_DAYS,
     deadline: game.deadline ?? null,
     playerCount: game.players.length,
     batteries: me?.batteries ?? null,
@@ -154,7 +155,7 @@ async function maybeResolve(ref) {
     const now = Date.now();
     let resolved = 0;
 
-    while (game.status === 'running' && resolved < engine.MAX_DAYS) {
+    while (game.status === 'running' && resolved < (game.maxDays ?? engine.MAX_DAYS)) {
       const current = orders.filter((o) => o.day === game.day);
       const alive = game.players.filter((p) => p.alive);
       const allReady = alive.every((p) => current.some((o) => o.uid === p.uid && o.ready));
@@ -200,8 +201,10 @@ async function listMyGames(uid) {
     .sort((a, b) => order[a.status] - order[b.status] || b.createdAt - a.createdAt);
 }
 
-async function createGame(user, { name, turnHours, earlyResolve }) {
+async function createGame(user, { name, turnHours, maxDays, earlyResolve }) {
   const hours = TURN_HOURS.includes(Number(turnHours)) ? Number(turnHours) : 24;
+  const days = Number.isInteger(Number(maxDays)) && Number(maxDays) >= engine.MIN_DAYS && Number(maxDays) <= engine.MAX_DAYS_LIMIT
+    ? Number(maxDays) : engine.MAX_DAYS;
   const ref = games().doc();
   const game = {
     code: randomCode(),
@@ -209,6 +212,7 @@ async function createGame(user, { name, turnHours, earlyResolve }) {
     hostId: user.uid,
     status: 'lobby',
     turnHours: hours,
+    maxDays: days,
     earlyResolve: earlyResolve !== false,
     playerIds: [user.uid],
     players: [{ uid: user.uid, name: user.name, ...engine.freeLook([]) }],

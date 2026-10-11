@@ -33,7 +33,7 @@
               <div class="meta">
                 <span>Code <b>{{ g.code }}</b></span>
                 <span v-if="g.status === 'lobby'"><b>{{ g.playerCount }}</b> / 8 dômes</span>
-                <span v-else>Jour <b>{{ Math.min(g.day, 15) }}</b> / 15</span>
+                <span v-else>Jour <b>{{ Math.min(g.day, g.maxDays) }}</b> / {{ g.maxDays }}</span>
                 <span v-if="g.status === 'running' && g.alive"><v-icon class="mi" size="1.1em" :icon="ICONS.battery" /> <b>{{ g.batteries }}</b></span>
                 <span v-if="g.status === 'running'"><v-icon class="mi" size="1.1em" :icon="ICONS.razoonium" /> <b>{{ g.razoonium }}</b></span>
                 <span v-if="g.status === 'running' && g.deadline"><v-icon class="mi" size="1.1em" :icon="ICONS.timer" /> <b class="countdown">{{ timeLeft(g.deadline, now) }}</b></span>
@@ -70,6 +70,10 @@
               </button>
             </div>
           </div>
+          <label class="field">
+            <span>Nombre de tours <b class="range-val">{{ maxDays }}</b></span>
+            <input v-model.number="maxDays" class="range" type="range" min="5" max="30" step="1" />
+          </label>
           <label class="check" style="margin:6px 0 18px">
             <input v-model="earlyResolve" type="checkbox" />
             Résoudre le tour dès que tous les dômes ont validé
@@ -109,6 +113,7 @@ const busy = ref(false);
 const code = ref('');
 const name = ref('');
 const turnHours = ref(24);
+const maxDays = ref(15);
 const earlyResolve = ref(true);
 
 function statusOf(g) {
@@ -148,7 +153,7 @@ async function go(request) {
 
 const join = () => go(() => api.post('/games/join', { code: code.value }));
 const create = () => go(() => api.post('/games', {
-  name: name.value, turnHours: turnHours.value, earlyResolve: earlyResolve.value,
+  name: name.value, turnHours: turnHours.value, maxDays: maxDays.value, earlyResolve: earlyResolve.value,
 }));
 
 const now = ref(Date.now());

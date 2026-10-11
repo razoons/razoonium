@@ -1,7 +1,9 @@
 // engine.js — Règles de Razoonium (fonctions pures, sans accès base de données)
 // Les lignes de journal utilisent des jetons {p:N} (joueur d'index N) rendus côté client.
 
-const MAX_DAYS = 15;
+const MAX_DAYS = 15; // durée par défaut ; chaque partie peut fixer la sienne (game.maxDays)
+const MIN_DAYS = 5;
+const MAX_DAYS_LIMIT = 30;
 const START_BATTERIES = 10;
 const SHIELD_DURATION = 3;
 const MAX_PLAYERS = 8;
@@ -305,7 +307,7 @@ function resolveTurn(game, ordersByIdx) {
   game.day++;
   snapshot(game);
   const alive = game.players.filter((p) => p.alive);
-  if (alive.length <= 1 || game.day > MAX_DAYS) {
+  if (alive.length <= 1 || game.day > (game.maxDays ?? MAX_DAYS)) {
     game.status = 'over';
     game.lots = [];
     game.ranking = ranking(game);
@@ -324,6 +326,6 @@ function ranking(game) {
 }
 
 module.exports = {
-  MAX_DAYS, START_BATTERIES, SHIELD_DURATION, MAX_PLAYERS, COLORS, EMBLEMS, freeLook,
+  MAX_DAYS, MIN_DAYS, MAX_DAYS_LIMIT, START_BATTERIES, SHIELD_DURATION, MAX_PLAYERS, COLORS, EMBLEMS, freeLook,
   emptyOrders, sanitizeOrders, startGame, resolveTurn, shieldTotal, prorata,
 };

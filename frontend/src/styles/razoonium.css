@@ -150,6 +150,13 @@ select option{background:#0a1226}
 .tabs{display:grid;grid-auto-flow:column;grid-auto-columns:minmax(0,1fr);margin-bottom:20px;border:1px solid var(--line)}
 .tabs button{background:transparent;border:0;color:var(--muted);padding:12px;font-family:'Orbitron';font-size:11px;letter-spacing:.2em;text-transform:uppercase;cursor:pointer}
 .tabs button.on{background:rgba(0,240,255,.12);color:var(--cyan);box-shadow:inset 0 -2px 0 var(--cyan)}
+.range-val{font-size:16px;color:var(--cyan);margin-left:8px;letter-spacing:.05em}
+.range{width:100%;height:28px;margin:0;background:transparent;cursor:pointer;-webkit-appearance:none;appearance:none}
+.range::-webkit-slider-runnable-track{height:4px;background:var(--line-strong)}
+.range::-moz-range-track{height:4px;background:var(--line-strong)}
+.range::-moz-range-progress{height:4px;background:var(--cyan)}
+.range::-webkit-slider-thumb{-webkit-appearance:none;width:18px;height:18px;margin-top:-7px;background:var(--cyan);transform:rotate(45deg);box-shadow:var(--glow)}
+.range::-moz-range-thumb{width:16px;height:16px;border:0;border-radius:0;background:var(--cyan);transform:rotate(45deg);box-shadow:var(--glow)}
 .chips{display:flex;gap:8px;flex-wrap:wrap}
 .chips button{min-width:56px;height:44px;border:1px solid var(--line-strong);background:transparent;color:var(--text);font-family:'Orbitron';font-size:14px;font-weight:700;cursor:pointer}
 .chips button.sel{background:var(--cyan);color:#000;box-shadow:var(--glow)}
