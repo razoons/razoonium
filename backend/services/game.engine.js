@@ -16,9 +16,15 @@ const COLORS = [
 // Emblèmes : noms d'icônes Material Design Icons (@mdi/font)
 const EMBLEMS = [
   'mdi-rocket-launch', 'mdi-alien', 'mdi-robot', 'mdi-ufo', 'mdi-satellite-variant', 'mdi-meteor',
-  'mdi-orbit', 'mdi-atom-variant', 'mdi-radioactive', 'mdi-biohazard', 'mdi-skull', 'mdi-ghost',
+  'mdi-atom-variant', 'mdi-radioactive', 'mdi-biohazard', 'mdi-skull', 'mdi-ghost',
   'mdi-spider', 'mdi-snake', 'mdi-bat', 'mdi-jellyfish', 'mdi-crown',
-  'mdi-diamond-stone', 'mdi-lightning-bolt', 'mdi-fire', 'mdi-crystal-ball',
+  'mdi-lightning-bolt', 'mdi-fire', 'mdi-crystal-ball',
+  'mdi-shark', 'mdi-unicorn', 'mdi-bee', 'mdi-turtle', 'mdi-mushroom', 'mdi-cactus',
+  'mdi-space-station', 'mdi-death-star-variant', 'mdi-star-shooting',
+  'mdi-moon-waning-crescent', 'mdi-robot-angry', 'mdi-ninja', 'mdi-pirate',
+  'mdi-virus', 'mdi-drama-masks', 'mdi-triforce', 'mdi-compass-rose', 'mdi-deathly-hallows',
+  'mdi-rocket', 'mdi-turbine', 'mdi-anchor', 'mdi-ship-wheel', 'mdi-axe-battle',
+  'mdi-cards-spade', 'mdi-cards-heart', 'mdi-cards-diamond', 'mdi-cards-club', 'mdi-shield-crown', 'mdi-poker-chip',
 ];
 
 /* Première couleur et premier emblème non pris par les joueurs donnés */

@@ -149,7 +149,7 @@ a{color:var(--cyan)}
 select option{background:#0a1226}
 .tabs{display:grid;grid-auto-flow:column;grid-auto-columns:minmax(0,1fr);margin-bottom:20px;border:1px solid var(--line)}
 .tabs button{background:transparent;border:0;color:var(--muted);padding:12px;font-family:'Orbitron';font-size:11px;letter-spacing:.2em;text-transform:uppercase;cursor:pointer}
-.tabs button.on{background:rgba(0,240,255,.12);color:var(--cyan);box-shadow:inset 0 -2px 0 var(--cyan)}
+.tabs button.on{background:color-mix(in srgb, var(--a, var(--cyan)) 12%, transparent);color:var(--a, var(--cyan));box-shadow:inset 0 -2px 0 var(--a, var(--cyan))}
 .range-val{font-size:16px;color:var(--cyan);margin-left:8px;letter-spacing:.05em}
 .range{width:100%;height:28px;margin:0;background:transparent;cursor:pointer;-webkit-appearance:none;appearance:none}
 .range::-webkit-slider-runnable-track{height:4px;background:var(--line-strong)}
@@ -267,6 +267,15 @@ select option{background:#0a1226}
 .v.teal{color:#2bffc6;text-shadow:0 0 10px rgba(43,255,198,.5)}
 .v.red{color:var(--red);text-shadow:0 0 10px rgba(255,77,109,.5)}
 
+/* Ressources teintées par la couleur de leur action (--a) */
+.stat.res{border-color:color-mix(in srgb, var(--a) 35%, transparent);
+  background:linear-gradient(135deg, color-mix(in srgb, var(--a) 9%, transparent), var(--panel-2) 65%)}
+.stat.res .k{color:var(--a)}
+.stat.res .v{color:var(--a);text-shadow:0 0 10px color-mix(in srgb, var(--a) 50%, transparent)}
+.stat.res .cells i{background:color-mix(in srgb, var(--a) 12%, transparent);border-color:color-mix(in srgb, var(--a) 25%, transparent)}
+.stat.res .cells i.on{background:var(--a);box-shadow:0 0 6px var(--a)}
+.stat.res .cells i.lock{background:color-mix(in srgb, var(--a) 30%, transparent);border-color:var(--a);box-shadow:none}
+.stat.res .layer:not(.old){border-color:var(--a);color:var(--a)}
 .cells{display:flex;flex-wrap:wrap;gap:3px;margin-top:8px}
 .cells i{width:10px;height:16px;background:rgba(157,255,74,.12);border:1px solid rgba(157,255,74,.25)}
 .cells i.on{background:var(--lime);box-shadow:0 0 6px var(--lime)}

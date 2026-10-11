@@ -113,9 +113,9 @@
 
           <div class="zone-title">Ressources</div>
           <div class="stats">
-            <div class="stat">
+            <div class="stat res" :style="{ '--a': actionColor.gen }">
               <div class="k"><v-icon class="mi" size="1.1em" :icon="ICONS.battery" /> Batteries</div>
-              <div class="v lime">{{ me.batteries }}</div>
+              <div class="v">{{ me.batteries }}</div>
               <div class="cells">
                 <i
                   v-for="i in Math.max(me.batteries, 1)" :key="i"
@@ -123,9 +123,9 @@
                 />
               </div>
             </div>
-            <div class="stat">
+            <div class="stat res" :style="{ '--a': actionColor.def }">
               <div class="k"><v-icon class="mi" size="1.1em" :icon="ICONS.shield" /> Bouclier</div>
-              <div class="v cyan">{{ shieldTotal(me) }}</div>
+              <div class="v">{{ shieldTotal(me) }}</div>
               <div v-if="draft.pact != null && shieldTotal(me)" class="s"><v-icon class="mi" size="1.1em" :icon="ICONS.shieldOff" /> inactif ce tour (pacte)</div>
               <div class="layers">
                 <span
@@ -147,8 +147,8 @@
                 <span :style="{ color: g.players[id].color, fontWeight: 700 }"><v-icon v-if="g.players[id].icon" class="mi" size="1em" :icon="g.players[id].icon" /> {{ g.players[id].name }}</span>
                 <span class="num teal"><v-icon class="mi" size="1.1em" :icon="ICONS.razoonium" /> {{ g.players[id].razoonium || 0 }}</span>
                 <template v-if="g.players[id].alive">
-                  <span class="num"><v-icon class="mi" size="1.1em" :icon="ICONS.battery" /> {{ g.players[id].batteries }}</span>
-                  <span class="num"><v-icon class="mi" size="1.1em" :icon="ICONS.shield" /> {{ shieldTotal(g.players[id]) }}</span>
+                  <span class="num" :style="{ color: actionColor.gen }"><v-icon class="mi" size="1.1em" :icon="ICONS.battery" /> {{ g.players[id].batteries }}</span>
+                  <span class="num" :style="{ color: actionColor.def }"><v-icon class="mi" size="1.1em" :icon="ICONS.shield" /> {{ shieldTotal(g.players[id]) }}</span>
                 </template>
                 <span v-else class="out"><v-icon class="mi" size="1.1em" :icon="ICONS.dead" /> jour {{ g.players[id].elimDay }}</span>
               </div>
@@ -260,8 +260,8 @@
               </span>
               <span class="num teal"><v-icon class="mi" size="1.1em" :icon="ICONS.razoonium" /> {{ g.players[id].razoonium || 0 }}</span>
               <template v-if="g.players[id].alive">
-                <span class="num"><v-icon class="mi" size="1.1em" :icon="ICONS.battery" /> {{ g.players[id].batteries }}</span>
-                <span class="num"><v-icon class="mi" size="1.1em" :icon="ICONS.shield" /> {{ shieldTotal(g.players[id]) }}</span>
+                <span class="num" :style="{ color: actionColor.gen }"><v-icon class="mi" size="1.1em" :icon="ICONS.battery" /> {{ g.players[id].batteries }}</span>
+                <span class="num" :style="{ color: actionColor.def }"><v-icon class="mi" size="1.1em" :icon="ICONS.shield" /> {{ shieldTotal(g.players[id]) }}</span>
               </template>
               <span v-else class="out"><v-icon class="mi" size="1.1em" :icon="ICONS.dead" /> jour {{ g.players[id].elimDay }}</span>
             </div>
@@ -270,9 +270,9 @@
         <section class="panel">
           <div class="ptitle">Évolution</div>
           <div class="tabs">
-            <button :class="{ on: chartTab === 'r' }" @click="chartTab = 'r'"><v-icon class="mi" size="1.1em" :icon="ICONS.razoonium" /> Razoonium</button>
-            <button :class="{ on: chartTab === 'b' }" @click="chartTab = 'b'"><v-icon class="mi" size="1.1em" :icon="ICONS.battery" /> Batteries</button>
-            <button :class="{ on: chartTab === 's' }" @click="chartTab = 's'"><v-icon class="mi" size="1.1em" :icon="ICONS.shield" /> Boucliers</button>
+            <button :class="{ on: chartTab === 'r' }" :style="{ '--a': actionColor.ref }" @click="chartTab = 'r'"><v-icon class="mi" size="1.1em" :icon="ICONS.razoonium" /> Razoonium</button>
+            <button :class="{ on: chartTab === 'b' }" :style="{ '--a': actionColor.gen }" @click="chartTab = 'b'"><v-icon class="mi" size="1.1em" :icon="ICONS.battery" /> Batteries</button>
+            <button :class="{ on: chartTab === 's' }" :style="{ '--a': actionColor.def }" @click="chartTab = 's'"><v-icon class="mi" size="1.1em" :icon="ICONS.shield" /> Boucliers</button>
           </div>
           <EvolutionChart
             :key="chartTab" :players="g.players" :history="g.history"
@@ -395,6 +395,9 @@ const standings = computed(() => g.value.ranking ?? g.value.players
   .sort((a, b) => (b.p.alive - a.p.alive) || (b.p.razoonium || 0) - (a.p.razoonium || 0) || b.p.batteries - a.p.batteries
     || shieldTotal(b.p) - shieldTotal(a.p) || (b.p.elimDay || 0) - (a.p.elimDay || 0))
   .map((x) => x.id));
+
+// Couleurs des actions, réutilisées pour les ressources (batteries = Générer, bouclier = Défendre)
+const actionColor = Object.fromEntries(ACTIONS.map((a) => [a.key, a.color]));
 
 const shieldLeft = (l) => g.value.shieldDuration - (g.value.day - l.day);
 
