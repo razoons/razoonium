@@ -529,7 +529,7 @@ function summary(a) {
   const o = draft.value;
   if (blockedByPact(a)) return '∞ pacte';
   if (!isOn(a)) return a.tag;
-  if (!a.target) return { gen: `→ +${Math.floor(o.gen * 1.5)}`, def: `bouclier +${o.def}`, bid: `mise ${o.bid}`, ref: `score +${o.ref}` }[a.key];
+  if (!a.target) return { gen: `→ +${o.gen * 3}`, def: `bouclier +${o.def}`, bid: `mise ${o.bid}`, ref: `score +${Math.floor(o.ref / 3)}` }[a.key];
   const t = o[a.target];
   return t == null ? '⚠ cible ?' : `→ ${g.value.players[t].name}`;
 }
@@ -538,7 +538,7 @@ function preview(key) {
   const o = draft.value;
   const nm = (id) => (id == null ? '' : g.value.players[id].name);
   switch (key) {
-    case 'gen': return o.gen ? `→ +${Math.floor(o.gen * 1.5)} (×1,5) · +${o.gen * 2} si Abondance/Pacte` : '';
+    case 'gen': return o.gen ? `→ +${o.gen * 3} (×3) · +${o.gen * 4} si Abondance · +${o.gen * 5} si Pacte` : '';
     case 'def': return o.def ? `→ Bouclier ${shieldTotal(me.value)} → ${shieldTotal(me.value) + o.def}` : '';
     case 'atk':
       if (!o.atk) return '';
@@ -546,12 +546,17 @@ function preview(key) {
       return `→ ${nm(o.atkTarget)} · bouclier visible ${shieldTotal(g.value.players[o.atkTarget])}`;
     case 'pact':
       if (o.pact == null) return '';
-      return `→ si ${nm(o.pact)} accepte aussi : génération ×2 · tes boucliers sont inactifs ce tour`;
+      return `→ si ${nm(o.pact)} accepte aussi : génération ×5 · tes boucliers sont inactifs ce tour`;
     case 'xfer':
       if (!o.xfer) return '';
       return o.xferTarget == null ? '⚠ choisis une cible' : `→ ${o.xfer} pour ${nm(o.xferTarget)}`;
     case 'bid': return o.bid ? `→ mise de ${o.bid} sur ${g.value.lots.length} lot(s)` : '';
-    case 'ref': return o.ref ? `→ Razoonium ${me.value.razoonium || 0} → ${(me.value.razoonium || 0) + o.ref}` : '';
+    case 'ref': {
+      if (!o.ref) return '';
+      const r = Math.floor(o.ref / 3);
+      const rest = o.ref % 3 ? ` · ${o.ref % 3} non raffinée(s), rendue(s)` : '';
+      return `→ Razoonium ${me.value.razoonium || 0} → ${(me.value.razoonium || 0) + r} (3 🔋 = 1)${rest}`;
+    }
   }
   return '';
 }

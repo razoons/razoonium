@@ -6,6 +6,7 @@ const MIN_DAYS = 5;
 const MAX_DAYS_LIMIT = 30;
 const START_BATTERIES = 10;
 const SHIELD_DURATION = 3;
+const REFINE_COST = 3; // batteries par Razoonium
 const MAX_PLAYERS = 8;
 
 const COLORS = [
@@ -38,7 +39,7 @@ function freeLook(players) {
 const WEATHER = {
   calm:      { label: 'Calme',     desc: 'Aucun effet' },
   storm:     { label: 'Tempête',   desc: '−1 batterie pour tous' },
-  abundance: { label: 'Abondance', desc: 'Génération ×2, Pacte ×2,5' },
+  abundance: { label: 'Abondance', desc: 'Génération ×4, Pacte ×6' },
 };
 
 const rand = (a, b) => a + Math.floor(Math.random() * (b - a + 1));
@@ -158,8 +159,8 @@ function resolveTurn(game, ordersByIdx) {
   const die = rand(1, 6);
   const weather = die <= 2 ? 'calm' : die <= 4 ? 'storm' : 'abundance';
   if (weather === 'storm') C.forEach((c) => (c.reserve -= 1));
-  const genMult = weather === 'abundance' ? 2 : 1.5;
-  const pactMult = weather === 'abundance' ? 2.5 : 2;
+  const genMult = weather === 'abundance' ? 4 : 3;
+  const pactMult = weather === 'abundance' ? 6 : 5;
   lines.push(`Météo (dé ${die}) : {w:${weather}} — ${WEATHER[weather].desc}.`);
 
   // 3. Pactes : proposer un pacte interdit l'attaque et la défense ce tour (réciproque ou non)
@@ -273,12 +274,19 @@ function resolveTurn(game, ordersByIdx) {
   //    (une fois raffiné, le Razoonium est définitif et imprenable)
   C.forEach((c) => {
     if (c.o.ref > 0) {
-      c.p.razoonium = (c.p.razoonium || 0) + c.refStake;
+      // REFINE_COST batteries → 1 Razoonium ; le reliquat non raffinable est rendu
+      const r = Math.floor(c.refStake / REFINE_COST);
+      const rest = c.refStake - r * REFINE_COST;
+      c.p.razoonium = (c.p.razoonium || 0) + r;
+      c.gains += rest;
       const lost = c.o.ref - c.refStake;
       const lostNote = lost ? ` (mise de ${c.o.ref}, dont ${lost} volée(s))` : '';
-      lines.push(c.refStake
-        ? `{p:${c.id}} raffine ${c.refStake} {i:battery} en ${c.refStake} {i:razoonium} Razoonium${lostNote}.`
-        : `{p:${c.id}} ne raffine rien : ses ${c.o.ref} {i:battery} misées ont toutes été volées.`);
+      const restNote = rest ? `, ${rest} {i:battery} non raffinée(s) rendue(s)` : '';
+      lines.push(r
+        ? `{p:${c.id}} raffine ${r * REFINE_COST} {i:battery} en ${r} {i:razoonium} Razoonium${lostNote}${restNote}.`
+        : c.refStake
+          ? `{p:${c.id}} ne raffine rien : il faut ${REFINE_COST} {i:battery} par Razoonium${lostNote}${restNote}.`
+          : `{p:${c.id}} ne raffine rien : ses ${c.o.ref} {i:battery} misées ont toutes été volées.`);
     }
     if (c.o.gen > 0) {
       const mult = c.pact ? pactMult : genMult;

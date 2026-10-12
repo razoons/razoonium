@@ -43,14 +43,14 @@
         <h3><v-icon class="mi" size="1.1em" :icon="ICONS.razoonium" /> Razoonium</h3>
         <ul>
           <li>C'est <b>ton score</b>.</li>
-          <li>On l'obtient en <b>raffinant</b> des Batteries (1 Batterie → 1 Razoonium) ou en <b>remportant un lot d'Enchère</b>.</li>
+          <li>On l'obtient en <b>raffinant</b> des Batteries (<b>3 Batteries → 1 Razoonium</b> ; le reliquat non raffinable t'est rendu) ou en <b>remportant un lot d'Enchère</b>.</li>
           <li>Il est <b>définitif</b> : il ne se dépense pas, ne se perd pas et <b>ne peut pas être volé</b>.</li>
           <li>Une Batterie raffinée ne sert plus à agir, survivre ou se défendre. Tout l'enjeu est de choisir <b>quand</b> transformer ta puissance en score.</li>
         </ul>
         <div class="ex warn">
           Le raffinage se fait <b>en fin de tour, après les attaques</b> : les Batteries misées en Raffinage
           <b class="red">peuvent être pillées</b> (en dernier, après ta réserve et ta Génération). Seul ce qui reste de la
-          mise devient du Razoonium.
+          mise est raffiné (3 Batteries → 1 Razoonium).
         </div>
         <h3>Réserve libre</h3>
         <ul>
@@ -83,13 +83,13 @@
         <div class="ptitle">04 · Générer</div>
         <ul>
           <li>La mise est consommée et remplacée en fin de tour par <b>⌊mise × multiplicateur⌋</b> (arrondi à l'inférieur).</li>
-          <li>Multiplicateur : <b class="lime">×1,5</b>, <b class="lime">×2</b> avec un Pacte scellé.</li>
-          <li>En <b>Abondance</b> : <b class="lime">×2</b>, et <b class="lime">×2,5</b> avec un Pacte scellé.</li>
+          <li>Multiplicateur : <b class="lime">×3</b>, <b class="lime">×5</b> avec un Pacte scellé.</li>
+          <li>En <b>Abondance</b> : <b class="lime">×4</b>, et <b class="lime">×6</b> avec un Pacte scellé.</li>
           <li>La mise en Génération <b class="red">peut être pillée</b> : le rendement est calculé sur ce qu'il en reste après les attaques.</li>
         </ul>
         <div class="ex">
-          <b>Exemple</b> : tu mets 6 en Génération. Sans attaque, tu récupères ⌊6 × 1,5⌋ = <b>9</b> (+3).
-          Si on te pille 2 Batteries dans ta Génération, tu ne récupères que ⌊4 × 1,5⌋ = <b>6</b>.
+          <b>Exemple</b> : tu mets 6 en Génération. Sans attaque, tu récupères 6 × 3 = <b>18</b> (+12).
+          Si on te pille 2 Batteries dans ta Génération, tu ne récupères que 4 × 3 = <b>12</b>.
         </div>
       </div>
 
@@ -122,7 +122,7 @@
             <li>3 Batteries cassent son Bouclier et sont perdues.</li>
             <li>Les 4 restantes te reviennent et volent 4 Batteries : 2 dans sa réserve, puis 2 dans sa Génération.</li>
             <li>Tu finis le tour à <b class="lime">+8</b> (4 restituées + 4 volées) pour 7 engagées.</li>
-            <li>Nat génère sur les 3 restantes : ⌊3 × 1,5⌋ = 4 au lieu de 7.</li>
+            <li>Nat génère sur les 3 restantes : 3 × 3 = 9 au lieu de 15.</li>
           </ul>
         </div>
       </div>
@@ -133,7 +133,7 @@
           <li>Proposer un Pacte <b>ne coûte aucune Batterie</b>. Un seul Pacte par tour.</li>
           <li><b>Engagement</b> : accepté ou non, tu ne peux <b class="red">ni attaquer ni défendre</b> ce tour.</li>
           <li><b>Exposition</b> : tes Boucliers sont <b class="red">inactifs</b> pendant ce tour. Toute attaque te pille directement, sans rien casser. Tes Boucliers ne sont pas abîmés et redeviennent actifs au tour suivant.</li>
-          <li><b>Pacte scellé</b> : uniquement si les deux joueurs se proposent mutuellement le Pacte. Les deux alliés ont une Génération <b class="lime">×2</b> (×2,5 en Abondance).</li>
+          <li><b>Pacte scellé</b> : uniquement si les deux joueurs se proposent mutuellement le Pacte. Les deux alliés ont une Génération <b class="lime">×5</b> (×6 en Abondance).</li>
           <li>Pacte non réciproque : pas de bonus, mais l'engagement et l'exposition s'appliquent quand même.</li>
         </ul>
         <div class="ex warn">
@@ -172,7 +172,7 @@
         <div class="wtable">
           <div><span class="d">1-2</span><b style="color:var(--cyan)"><v-icon class="mi" size="1.1em" :icon="WEATHER.calm.icon" /> Calme</b><span>Aucun effet</span></div>
           <div><span class="d">3-4</span><b style="color:var(--amber)"><v-icon class="mi" size="1.1em" :icon="WEATHER.storm.icon" /> Tempête</b><span>−1 <v-icon class="mi" size="1.1em" :icon="ICONS.battery" /> supplémentaire pour tous</span></div>
-          <div><span class="d">5-6</span><b style="color:var(--lime)"><v-icon class="mi" size="1.1em" :icon="WEATHER.abundance.icon" /> Abondance</b><span>Génération ×2 · Pacte ×2,5</span></div>
+          <div><span class="d">5-6</span><b style="color:var(--lime)"><v-icon class="mi" size="1.1em" :icon="WEATHER.abundance.icon" /> Abondance</b><span>Génération ×4 · Pacte ×6</span></div>
         </div>
       </div>
 

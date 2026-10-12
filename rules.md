@@ -31,10 +31,10 @@ Un jeu de stratégie au tour par tour pour **4 à 8 joueurs**. Chaque joueur dir
 
 ### Le Razoonium
 - C'est **ton score**.
-- On l'obtient en **raffinant** des Batteries (1 Batterie → 1 Razoonium) ou en **remportant un lot d'Enchère**.
+- On l'obtient en **raffinant** des Batteries (**3 Batteries → 1 Razoonium** ; le reliquat non raffinable t'est rendu) ou en **remportant un lot d'Enchère**.
 - Il est **définitif** : il ne se dépense pas, ne se perd pas et **ne peut pas être volé**.
 - Une Batterie raffinée ne peut plus servir à agir, survivre ou se défendre. Tout l'enjeu est de choisir **quand** transformer ta puissance en score.
-- ⚠️ Le raffinage se fait **en fin de tour, après les attaques** : les Batteries misées en Raffinage **peuvent être pillées** (en dernier recours, après ta réserve et ta Génération). Seul ce qui reste de la mise est converti en Razoonium.
+- ⚠️ Le raffinage se fait **en fin de tour, après les attaques** : les Batteries misées en Raffinage **peuvent être pillées** (en dernier recours, après ta réserve et ta Génération). Seul ce qui reste de la mise est raffiné (3 Batteries → 1 Razoonium).
 
 ### La Réserve
 Les Batteries que tu n'engages dans aucune action forment ta **réserve libre**. Elle paie le coût de vie et c'est **la première cible du pillage**.
@@ -54,24 +54,24 @@ Les Batteries que tu n'engages dans aucune action forment ta **réserve libre**.
 
 | Action | Cible | Ce que deviennent les Batteries engagées |
 | :--- | :--- | :--- |
-| **Générer** | Soi-même | Consommées et remplacées par $\lfloor X \times 1,5 \rfloor$ Batteries en fin de tour. |
+| **Générer** | Soi-même | Consommées et remplacées par $X \times 3$ Batteries en fin de tour. |
 | **Défendre** | Soi-même | Transformées en $X$ points de Bouclier, actifs **3 tours**. |
 | **Attaquer** | Un joueur | Celles qui cassent le Bouclier sont perdues ; les autres te reviennent et volent autant. |
-| **Pacte** | Un joueur | Ne coûte rien. Interdit Attaque et Défense ce tour et rend tes Boucliers **inactifs** ; si réciproque, Génération ×2. |
+| **Pacte** | Un joueur | Ne coûte rien. Interdit Attaque et Défense ce tour et rend tes Boucliers **inactifs** ; si réciproque, Génération ×5. |
 | **Transférer** | Un joueur | Données à ce joueur, qui les reçoit **dans le tour** (avant les attaques). |
 | **Enchère** | La réserve | Si tu gagnes un lot : mise payée, lot de Razoonium reçu. Sinon : mise remboursée. |
-| **Raffiner** | Soi-même | Converties en Razoonium en fin de tour, après les attaques (la mise est pillable). |
+| **Raffiner** | Soi-même | Converties en Razoonium (3 pour 1) en fin de tour, après les attaques (la mise est pillable). |
 
 ---
 
 ## ⚛️ 4. Générer
 
 - La mise est consommée et remplacée en fin de tour par $\lfloor \text{mise} \times \text{multiplicateur} \rfloor$ (arrondi à l'inférieur).
-- Multiplicateur : **×1,5** normalement, **×2** avec un Pacte scellé.
-- La Météo *Abondance* le fait passer à **×2** (et à **×2,5** avec un Pacte scellé).
+- Multiplicateur : **×3** normalement, **×5** avec un Pacte scellé.
+- La Météo *Abondance* le fait passer à **×4** (et à **×6** avec un Pacte scellé).
 - La mise en Génération **peut être pillée** (voir Attaque). Le rendement est calculé sur ce qu'il en reste après les attaques.
 
-> **Exemple** : tu mets 6 en Génération. Sans attaque, tu récupères ⌊6 × 1,5⌋ = **9** (+3). Si un attaquant te pille 2 Batteries dans ta Génération, tu ne récupères que ⌊4 × 1,5⌋ = **6**.
+> **Exemple** : tu mets 6 en Génération. Sans attaque, tu récupères 6 × 3 = **18** (+12). Si un attaquant te pille 2 Batteries dans ta Génération, tu ne récupères que 4 × 3 = **12**.
 
 ---
 
@@ -102,7 +102,7 @@ Tu ne peux attaquer qu'**un seul joueur par tour**. Quand tu l'attaques avec $X$
 > - 3 de tes Batteries cassent son Bouclier et sont perdues.
 > - Les 4 restantes te reviennent et volent 4 Batteries : 2 dans sa réserve, puis 2 dans sa Génération.
 > - Tu termines le tour avec **+8** (4 restituées + 4 volées) pour 7 engagées.
-> - Nat génère sur les 3 qui restent : ⌊3 × 1,5⌋ = 4 au lieu de 7.
+> - Nat génère sur les 3 qui restent : 3 × 3 = 9 au lieu de 15.
 
 ---
 
@@ -111,7 +111,7 @@ Tu ne peux attaquer qu'**un seul joueur par tour**. Quand tu l'attaques avec $X$
 - Proposer un Pacte à un joueur **ne coûte aucune Batterie**. On ne peut proposer qu'un seul Pacte par tour.
 - **Engagement** : que le Pacte soit accepté ou non, tu **ne peux ni Attaquer ni Défendre** ce tour.
 - **Exposition** : pendant ce tour, **tes Boucliers sont inactifs**. Toute attaque contre toi pille directement ta réserve puis ta Génération, sans rien casser. Tes Boucliers ne sont pas abîmés et redeviennent actifs au tour suivant.
-- **Pacte scellé** : uniquement si les deux joueurs se proposent mutuellement le Pacte (A → B et B → A). Les deux alliés ont alors une Génération **×2** (×2,5 en Abondance).
+- **Pacte scellé** : uniquement si les deux joueurs se proposent mutuellement le Pacte (A → B et B → A). Les deux alliés ont alors une Génération **×5** (×6 en Abondance).
 - **Pacte non réciproque** : pas de bonus, mais l'engagement et l'exposition s'appliquent quand même.
 
 > **Trahison** : proposer un Pacte, c'est se mettre à nu. Ton « allié » peut ne pas jouer le Pacte et t'attaquer, ou prévenir un troisième joueur et partager le butin avec lui par Transfert.
@@ -150,7 +150,7 @@ Un dé à 6 faces est lancé à chaque résolution. Personne ne connaît la mét
 | :--- | :--- | :--- |
 | 1-2 | **Calme** | Aucun effet. |
 | 3-4 | **Tempête** | Tous les dômes perdent **1 Batterie supplémentaire**. |
-| 5-6 | **Abondance** | Génération **×2** au lieu de ×1,5 ; Pacte scellé **×2,5** au lieu de ×2. |
+| 5-6 | **Abondance** | Génération **×4** au lieu de ×3 ; Pacte scellé **×6** au lieu de ×5. |
 
 ---
 
