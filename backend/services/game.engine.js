@@ -5,7 +5,6 @@ const MAX_DAYS = 15; // durée par défaut ; chaque partie peut fixer la sienne 
 const MIN_DAYS = 5;
 const MAX_DAYS_LIMIT = 30;
 const START_BATTERIES = 10;
-const SHIELD_DURATION = 3;
 const REFINE_COST = 3; // batteries par Razoonium
 const MAX_PLAYERS = 8;
 
@@ -37,15 +36,14 @@ function freeLook(players) {
 }
 
 const WEATHER = {
-  calm:      { label: 'Calme',     desc: 'Aucun effet' },
-  storm:     { label: 'Tempête',   desc: '−1 batterie pour tous' },
-  abundance: { label: 'Abondance', desc: 'Génération ×4, Pacte ×6' },
+  gloom:     { label: 'Grisaille', desc: 'Génération ×2' },
+  calm:      { label: 'Calme',     desc: 'Génération ×3' },
+  abundance: { label: 'Abondance', desc: 'Génération ×4' },
 };
 
 const rand = (a, b) => a + Math.floor(Math.random() * (b - a + 1));
-const emptyOrders = () => ({ gen: 0, def: 0, atk: 0, atkTarget: null, pact: null, xfer: 0, xferTarget: null, bid: 0, ref: 0 });
-const spent = (o) => o.gen + o.def + o.atk + o.xfer + o.bid + o.ref;
-const shieldTotal = (p) => p.shields.reduce((s, l) => s + l.amount, 0);
+const emptyOrders = () => ({ gen: 0, def: 0, atk: 0, atkTarget: null, prot: 0, protTarget: null, xfer: 0, xferTarget: null, bid: 0, ref: 0 });
+const spent = (o) => o.gen + o.def + o.atk + o.prot + o.xfer + o.bid + o.ref;
 
 /* Lots du jour : quantités de Razoonium, triées par ordre décroissant */
 function rollLots(aliveCount) {
@@ -53,33 +51,11 @@ function rollLots(aliveCount) {
   return Array.from({ length: n }, () => rand(2, 8)).sort((a, b) => b - a);
 }
 
-/* Répartition au prorata (plus forts restes) */
-function prorata(total, weights) {
-  const W = weights.reduce((a, b) => a + b, 0);
-  if (!W || !total) return weights.map(() => 0);
-  const raw = weights.map((w) => (total * w) / W);
-  const out = raw.map(Math.floor);
-  const rest = total - out.reduce((a, b) => a + b, 0);
-  raw.map((r, i) => [r - out[i], i]).sort((a, b) => b[0] - a[0]).slice(0, rest).forEach(([, i]) => out[i]++);
-  return out;
-}
-
-/* Détruit les boucliers les plus anciens en priorité */
-function destroyShields(p, dmg) {
-  for (const l of p.shields) {
-    if (dmg <= 0) break;
-    const d = Math.min(l.amount, dmg);
-    l.amount -= d;
-    dmg -= d;
-  }
-  p.shields = p.shields.filter((l) => l.amount > 0);
-}
-
 /* Valide et normalise des ordres reçus d'un client. Lève une Error si invalides. */
 function sanitizeOrders(raw, game, idx) {
   const me = game.players[idx];
   const o = emptyOrders();
-  for (const k of ['gen', 'def', 'atk', 'xfer', 'bid', 'ref']) {
+  for (const k of ['gen', 'def', 'atk', 'prot', 'xfer', 'bid', 'ref']) {
     const v = Number(raw?.[k] ?? 0);
     if (!Number.isInteger(v) || v < 0) throw new Error(`Valeur invalide pour "${k}".`);
     o[k] = v;
@@ -93,10 +69,11 @@ function sanitizeOrders(raw, game, idx) {
   };
   o.atkTarget = target('atkTarget');
   o.xferTarget = target('xferTarget');
-  o.pact = target('pact');
+  o.protTarget = target('protTarget');
   if (o.atk > 0 && o.atkTarget === null) throw new Error('Attaque sans cible.');
   if (o.xfer > 0 && o.xferTarget === null) throw new Error('Transfert sans cible.');
-  if (o.pact !== null && (o.atk > 0 || o.def > 0)) throw new Error('Pacte : attaque et défense interdites ce tour.');
+  if (o.prot > 0 && o.protTarget === null) throw new Error('Protection sans cible.');
+  if (o.prot > 0 && o.atk > 0 && o.protTarget === o.atkTarget) throw new Error('Tu ne peux pas protéger le dôme que tu attaques.');
   if (spent(o) > me.batteries) throw new Error('Pas assez de batteries.');
   return o;
 }
@@ -104,7 +81,7 @@ function sanitizeOrders(raw, game, idx) {
 function snapshot(game) {
   game.history.push({
     day: game.day,
-    players: game.players.map((p) => ({ b: p.batteries, alive: p.alive, s: shieldTotal(p), r: p.razoonium || 0 })),
+    players: game.players.map((p) => ({ b: p.batteries, alive: p.alive, r: p.razoonium || 0 })),
   });
 }
 
@@ -119,7 +96,6 @@ function startGame(game) {
     ...p,
     batteries: START_BATTERIES,
     razoonium: 0,
-    shields: [],
     alive: true,
     elimDay: null,
   }));
@@ -146,9 +122,10 @@ function resolveTurn(game, ordersByIdx) {
     if (!p.alive) return;
     const o = { ...emptyOrders(), ...(ordersByIdx.get(id) || {}) };
     if (o.atk > 0 && (o.atkTarget == null || !game.players[o.atkTarget]?.alive)) o.atk = 0;
+    if (o.prot > 0 && (o.protTarget == null || !game.players[o.protTarget]?.alive)) o.prot = 0;
     if (o.xfer > 0 && (o.xferTarget == null || !game.players[o.xferTarget]?.alive)) o.xfer = 0;
     if (spent(o) > p.batteries) Object.assign(o, emptyOrders());
-    C.set(id, { id, p, o, before: p.batteries, reserve: p.batteries - spent(o), genStake: o.gen, refStake: o.ref, gains: 0, pact: false });
+    C.set(id, { id, p, o, before: p.batteries, reserve: p.batteries - spent(o), genStake: o.gen, refStake: o.ref, gains: 0, shieldLost: 0 });
   });
 
   // 1. Coût de vie
@@ -157,33 +134,12 @@ function resolveTurn(game, ordersByIdx) {
 
   // 2. Météo
   const die = rand(1, 6);
-  const weather = die <= 2 ? 'calm' : die <= 4 ? 'storm' : 'abundance';
-  if (weather === 'storm') C.forEach((c) => (c.reserve -= 1));
-  const genMult = weather === 'abundance' ? 4 : 3;
-  const pactMult = weather === 'abundance' ? 6 : 5;
+  // 1 : Grisaille (×2) · 2 à 5 : Calme (×3) · 6 : Abondance (×4)
+  const weather = die === 1 ? 'gloom' : die === 6 ? 'abundance' : 'calm';
+  const genMult = { gloom: 2, calm: 3, abundance: 4 }[weather];
   lines.push(`Météo (dé ${die}) : {w:${weather}} — ${WEATHER[weather].desc}.`);
 
-  // 3. Pactes : proposer un pacte interdit l'attaque et la défense ce tour (réciproque ou non)
-  //    et rend ses boucliers inactifs ce tour ; seul un pacte réciproque booste la génération.
-  C.forEach((c) => {
-    const t = c.o.pact;
-    if (t != null && C.has(t) && C.get(t).o.pact === c.id) c.pact = true;
-  });
-  C.forEach((c) => {
-    if (c.o.pact == null) return;
-    const refund = c.o.atk + c.o.def; // normalement 0 : déjà refusé à la saisie
-    c.reserve += refund;
-    c.o.atk = 0;
-    c.o.def = 0;
-    if (c.pact && c.id < c.o.pact) lines.push(`Pacte scellé entre {p:${c.id}} et {p:${c.o.pact}} — génération boostée.`);
-    if (!c.pact) lines.push(`{p:${c.id}} a tendu la main à {p:${c.o.pact}}… sans retour.`);
-    if (refund) lines.push(`{p:${c.id}} : ${refund} batterie(s) d'attaque/défense annulée(s) par le pacte.`);
-  });
-
-  // 4. Construction des boucliers (actifs dès ce tour)
-  C.forEach((c) => { if (c.o.def > 0) c.p.shields.push({ amount: c.o.def, day }); });
-
-  // 5. Enchères : lots de Razoonium crédités directement (imprenables),
+  // 3. Enchères : lots de Razoonium crédités directement (imprenables),
   //    mises perdantes remboursées dans la réserve (pillable)
   const bidders = [...C.values()].filter((c) => c.o.bid > 0)
     .sort((a, b) => b.o.bid - a.o.bid || a.p.batteries - b.p.batteries);
@@ -198,7 +154,7 @@ function resolveTurn(game, ordersByIdx) {
     }
   });
 
-  // 6. Transferts : reçus dans la réserve du destinataire (pillable)
+  // 4. Transferts : reçus dans la réserve du destinataire (pillable)
   C.forEach((c) => {
     if (c.o.xfer > 0) {
       C.get(c.o.xferTarget).reserve += c.o.xfer;
@@ -206,7 +162,18 @@ function resolveTurn(game, ordersByIdx) {
     }
   });
 
-  // 7. Attaques
+  // 5. Protections : des batteries envoyées en bouclier sur un autre dôme pour ce tour
+  C.forEach((c) => {
+    if (c.o.prot > 0) lines.push(`{p:${c.id}} protège {p:${c.o.protTarget}} avec ${c.o.prot} {i:battery}.`);
+  });
+
+  // 6. Attaques aux dés : 1 batterie d'attaque = 1 dé, 1 batterie de bouclier = 1 dé.
+  //    Les dés d'attaque de tous les assaillants d'une cible sont triés ensemble. Côté défense,
+  //    les dés du dôme attaqué passent d'abord, puis ceux de ses protecteurs ; chaque joueur trie
+  //    ses propres dés du plus fort au plus faible. On compare ensuite un à un, dans l'ordre.
+  //    Attaque strictement plus forte : elle prend la batterie de bouclier ; sinon (égalité comprise)
+  //    le lanceur du dé de défense prend la batterie d'attaque.
+  //    Chaque dé d'attaque en trop rend sa batterie à son lanceur et pille 1 batterie à la cible.
   const byTarget = new Map();
   C.forEach((c) => {
     if (c.o.atk > 0) {
@@ -214,63 +181,105 @@ function resolveTurn(game, ordersByIdx) {
       byTarget.get(c.o.atkTarget).push(c);
     }
   });
+  // Entre plusieurs joueurs d'un même camp : le plus de dés lancés, puis le moins de batteries, puis le hasard
+  const tie = new Map([...C.keys()].map((id) => [id, Math.random()]));
+  const priority = (dice) => (x, y) => dice(y) - dice(x) || x.before - y.before || tie.get(x.id) - tie.get(y.id);
+  const roll = (c, k) => Array.from({ length: k }, () => ({ c, v: rand(1, 6) })).sort((x, y) => y.v - x.v);
+  const dieList = (dice) => dice.map((d) => d.v).join(' · ');
+
   byTarget.forEach((atks, tid) => {
     const tc = C.get(tid);
-    const A = atks.reduce((s, a) => s + a.o.atk, 0);
-    // Une cible qui propose un pacte n'a aucun bouclier actif ce tour (ses boucliers sont épargnés)
-    const exposed = tc.o.pact != null;
-    const shieldBefore = shieldTotal(tc.p);
-    const absorbed = exposed ? 0 : Math.min(A, shieldBefore);
-    destroyShields(tc.p, absorbed);
-    const net = A - absorbed;
-    const netShares = prorata(net, atks.map((a) => a.o.atk));
-    // Pillage : d'abord la réserve libre, puis la mise en génération, puis la mise en raffinage
-    const free = Math.max(0, tc.reserve);
-    const steal = Math.min(net, free + tc.genStake + tc.refStake);
-    const fromReserve = Math.min(steal, free);
-    const fromGen = Math.min(steal - fromReserve, tc.genStake);
-    const fromRef = steal - fromReserve - fromGen;
-    tc.reserve -= fromReserve;
-    tc.genStake -= fromGen;
-    tc.refStake -= fromRef;
-    const stealShares = prorata(steal, netShares);
-    atks.forEach((a, i) => { a.gains += netShares[i] + stealShares[i]; });
-
-    // Journal : qui attaque, ce que fait le bouclier, ce que perd la cible, ce que gagne chaque attaquant
     const T = `{p:${tid}}`;
+    const aPrio = priority((c) => c.o.atk);
+    const aDice = atks.flatMap((a) => roll(a, a.o.atk)).sort((x, y) => y.v - x.v || aPrio(x.c, y.c));
+    const helpers = [...C.values()].filter((c) => c.o.prot > 0 && c.o.protTarget === tid).sort(priority((c) => c.o.prot));
+    const defenders = [tc, ...helpers].filter((c) => (c === tc ? c.o.def : c.o.prot) > 0);
+    const dDice = defenders.flatMap((c) => roll(c, c === tc ? c.o.def : c.o.prot));
+    const n = Math.min(aDice.length, dDice.length);
+
+    const res = new Map([...atks, ...defenders].map((c) => [c.id, { won: 0, lost: 0, extra: 0, loot: 0 }]));
+    const duels = [];
+    for (let i = 0; i < n; i++) {
+      const a = aDice[i];
+      const d = dDice[i];
+      if (a.v > d.v) {
+        res.get(a.c.id).won++;
+        res.get(d.c.id).lost++;
+        d.c.shieldLost++;
+        a.c.gains += 2; // sa batterie d'attaque lui revient + la batterie de bouclier prise
+      } else {
+        res.get(d.c.id).won++;
+        res.get(a.c.id).lost++;
+        d.c.gains += 1; // le lanceur du dé de défense empoche la batterie d'attaque
+      }
+      duels.push(`${a.v} contre ${d.v} → {p:${(a.v > d.v ? a : d).c.id}}`);
+    }
+    // Pillage par les dés en trop, dans l'ordre du tri : réserve libre, puis génération, puis raffinage
+    const taken = { reserve: 0, gen: 0, ref: 0 };
+    for (const d of aDice.slice(n)) {
+      const r = res.get(d.c.id);
+      r.extra++;
+      d.c.gains += 1;
+      const from = tc.reserve > 0 ? 'reserve' : tc.genStake > 0 ? 'gen' : tc.refStake > 0 ? 'ref' : null;
+      if (!from) continue;
+      if (from === 'reserve') tc.reserve--;
+      else if (from === 'gen') tc.genStake--;
+      else tc.refStake--;
+      taken[from]++;
+      r.loot++;
+      d.c.gains += 1;
+    }
+
+    // Journal : qui attaque, les dés, les duels, le pillage, puis le bilan de chacun
+    const A = aDice.length;
     lines.push(atks.length === 1
       ? `{p:${atks[0].id}} attaque ${T} avec ${A} {i:battery}.`
       : `${atks.map((a) => `{p:${a.id}} (${a.o.atk} {i:battery})`).join(', ').replace(/, ([^,]*)$/, ' et $1')} attaquent ensemble ${T}.`);
-    if (exposed) lines.push(`↳ Le bouclier de ${T} est inactif (pacte) : aucune protection.`);
-    else if (!shieldBefore) lines.push(`↳ ${T} n'a pas de bouclier.`);
+    lines.push(`↳ Dés d'attaque : ${aDice.map((d) => (atks.length === 1 ? d.v : `${d.v} {p:${d.c.id}}`)).join(' · ')}.`);
+    if (!dDice.length) lines.push(`↳ ${T} n'a pas de bouclier.`);
+    else if (defenders.length === 1 && defenders[0] === tc) lines.push(`↳ Dés de défense de ${T} : ${dieList(dDice)}.`);
     else {
-      const stop = net ? '' : ' L\'attaque est entièrement stoppée.';
-      lines.push(`↳ Le bouclier de ${T} absorbe ${absorbed} {i:battery} d'attaque, perdues (bouclier ${shieldBefore} → ${shieldBefore - absorbed}).${stop}`);
+      const groups = defenders.map((c) => `{p:${c.id}} ${dieList(dDice.filter((d) => d.c === c))}`);
+      lines.push(`↳ Dés de défense, dans l'ordre : ${groups.join(', puis ')}.`);
     }
-    if (steal) {
+    if (duels.length) lines.push(`↳ Duels : ${duels.join(' ; ')}.`);
+    const stolen = taken.reserve + taken.gen + taken.ref;
+    if (stolen) {
       const parts = [
-        fromReserve && `${fromReserve} dans sa réserve`,
-        fromGen && `${fromGen} dans sa mise en génération`,
-        fromRef && `${fromRef} dans sa mise en raffinage`,
+        taken.reserve && `${taken.reserve} dans sa réserve`,
+        taken.gen && `${taken.gen} dans sa mise en génération`,
+        taken.ref && `${taken.ref} dans sa mise en raffinage`,
       ].filter(Boolean);
-      const empty = steal < net ? ' Il n\'y avait rien de plus à prendre.' : '';
-      lines.push(`↳ ${T} se fait voler ${steal} {i:battery} : ${parts.join(', ')}.${empty}`);
-    } else if (net) {
-      lines.push(`↳ ${T} n'avait plus aucune batterie à voler.`);
+      const empty = stolen < A - n ? ' Il n\'y avait rien de plus à prendre.' : '';
+      lines.push(`↳ ${T} se fait piller ${stolen} {i:battery} : ${parts.join(', ')}.${empty}`);
+    } else if (A > n) {
+      lines.push(`↳ ${T} n'avait plus aucune batterie à piller.`);
     }
-    atks.forEach((a, i) => {
-      if (!netShares[i]) return;
-      const loot = stealShares[i] ? ` et empoche ${stealShares[i]} {i:battery} volée(s)` : '';
-      lines.push(`↳ {p:${a.id}} récupère ${netShares[i]} {i:battery} d'attaque${loot}.`);
+    atks.forEach((a) => {
+      const r = res.get(a.id);
+      const parts = [
+        r.won && `gagne ${r.won} duel(s) et prend ${r.won} {i:battery} de bouclier`,
+        r.lost && `perd ${r.lost} duel(s) et ${r.lost} {i:battery}`,
+        r.extra && `récupère ${r.extra} {i:battery} en trop${r.loot ? ` et en pille ${r.loot}` : ''}`,
+      ].filter(Boolean);
+      lines.push(`↳ {p:${a.id}} ${parts.join(', ')}.`);
+    });
+    defenders.forEach((c) => {
+      const r = res.get(c.id);
+      const unused = (c === tc ? c.o.def : c.o.prot) - r.won - r.lost;
+      const parts = [
+        r.lost && `perd ${r.lost} {i:battery} de bouclier`,
+        r.won && `empoche ${r.won} {i:battery} d'attaque`,
+        unused && `récupère ${unused} {i:battery} de bouclier non utilisée(s)`,
+      ].filter(Boolean);
+      lines.push(`↳ {p:${c.id}} ${parts.join(', ')}.`);
     });
   });
 
-  // 8. Expiration des boucliers (actifs 3 tours : jour J, J+1, J+2)
-  C.forEach((c) => {
-    c.p.shields = c.p.shields.filter((l) => l.amount > 0 && day - l.day < SHIELD_DURATION - 1);
-  });
+  // 7. Boucliers : ils ne durent que le tour ; toute batterie de bouclier non prise revient à son propriétaire
+  C.forEach((c) => { c.gains += c.o.def + c.o.prot - c.shieldLost; });
 
-  // 9. Génération & raffinage, calculés sur les mises restantes après pillage
+  // 8. Génération & raffinage, calculés sur les mises restantes après pillage
   //    (une fois raffiné, le Razoonium est définitif et imprenable)
   C.forEach((c) => {
     if (c.o.ref > 0) {
@@ -289,11 +298,10 @@ function resolveTurn(game, ordersByIdx) {
           : `{p:${c.id}} ne raffine rien : ses ${c.o.ref} {i:battery} misées ont toutes été volées.`);
     }
     if (c.o.gen > 0) {
-      const mult = c.pact ? pactMult : genMult;
-      const y = Math.floor(c.genStake * mult);
+      const y = Math.floor(c.genStake * genMult);
       c.gains += y;
       const lost = c.o.gen - c.genStake;
-      const m = String(mult).replace('.', ',');
+      const m = String(genMult).replace('.', ',');
       const calc = lost ? `mise de ${c.o.gen}, dont ${lost} volée(s) : ${c.genStake} × ${m}` : `${c.genStake} × ${m}`;
       lines.push(c.genStake
         ? `{p:${c.id}} génère ${y} {i:battery} (${calc}).`
@@ -307,7 +315,6 @@ function resolveTurn(game, ordersByIdx) {
     if (c.p.batteries <= 0) {
       c.p.batteries = 0;
       c.p.alive = false;
-      c.p.shields = [];
       c.p.elimDay = day;
       lines.push(`{i:dead} Le dôme de {p:${c.id}} s'éteint.`);
     }
@@ -335,11 +342,11 @@ function ranking(game) {
   return game.players
     .map((p, id) => ({ id, p }))
     .sort((a, b) => (b.p.alive - a.p.alive) || (b.p.razoonium || 0) - (a.p.razoonium || 0)
-      || b.p.batteries - a.p.batteries || shieldTotal(b.p) - shieldTotal(a.p) || (b.p.elimDay || 0) - (a.p.elimDay || 0))
+      || b.p.batteries - a.p.batteries || (b.p.elimDay || 0) - (a.p.elimDay || 0))
     .map((x) => x.id);
 }
 
 module.exports = {
-  MAX_DAYS, MIN_DAYS, MAX_DAYS_LIMIT, START_BATTERIES, SHIELD_DURATION, MAX_PLAYERS, COLORS, EMBLEMS, freeLook,
-  emptyOrders, sanitizeOrders, startGame, resolveTurn, shieldTotal, prorata,
+  MAX_DAYS, MIN_DAYS, MAX_DAYS_LIMIT, START_BATTERIES, MAX_PLAYERS, COLORS, EMBLEMS, freeLook,
+  emptyOrders, sanitizeOrders, startGame, resolveTurn,
 };

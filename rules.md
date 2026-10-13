@@ -14,7 +14,7 @@ Un jeu de stratégie au tour par tour pour **4 à 8 joueurs**. Chaque joueur dir
 ### Classement
 1. Dômes encore allumés d'abord.
 2. Puis le plus de **Razoonium**.
-3. En cas d'égalité : le plus de **Batteries**, puis le plus de **Bouclier**.
+3. En cas d'égalité : le plus de **Batteries**.
 4. Entre dômes éteints : celui qui a tenu le plus longtemps passe devant.
 
 ---
@@ -27,7 +27,7 @@ Un jeu de stratégie au tour par tour pour **4 à 8 joueurs**. Chaque joueur dir
 - **Coût de vie** : à chaque tour, ton dôme consomme automatiquement **1 Batterie**.
 - **Élimination** : si, à la fin d'un tour, tu as **0 Batterie ou moins**, ton dôme s'éteint. Tu ne joues plus, mais ton Razoonium reste compté au classement (derrière les dômes allumés).
 
-> ⚠️ Si tu engages toutes tes Batteries, le coût de vie te fait passer à −1. Seuls tes gains du tour (Génération, Batteries d'attaque restituées, pillage) peuvent alors te sauver. Garde toujours une marge, surtout en cas de Tempête (−1 de plus).
+> ⚠️ Si tu engages toutes tes Batteries, le coût de vie te fait passer à −1. Seuls tes gains du tour (Génération, Batteries d'attaque restituées, pillage) peuvent alors te sauver. Garde toujours une marge.
 
 ### Le Razoonium
 - C'est **ton score**.
@@ -55,9 +55,9 @@ Les Batteries que tu n'engages dans aucune action forment ta **réserve libre**.
 | Action | Cible | Ce que deviennent les Batteries engagées |
 | :--- | :--- | :--- |
 | **Générer** | Soi-même | Consommées et remplacées par $X \times 3$ Batteries en fin de tour. |
-| **Défendre** | Soi-même | Transformées en $X$ points de Bouclier, actifs **3 tours**. |
-| **Attaquer** | Un joueur | Celles qui cassent le Bouclier sont perdues ; les autres te reviennent et volent autant. |
-| **Pacte** | Un joueur | Ne coûte rien. Interdit Attaque et Défense ce tour et rend tes Boucliers **inactifs** ; si réciproque, Génération ×5. |
+| **Défendre** | Soi-même | Donnent $X$ dés de défense **ce tour** ; celles non prises te reviennent. |
+| **Attaquer** | Un joueur | Donnent $X$ dés contre les dés de défense : chaque duel gagné prend 1 Bouclier, chaque duel perdu coûte 1 Batterie ; les dés en trop te reviennent et pillent autant. |
+| **Protéger** | Un joueur | Donnent $X$ dés de défense **ce tour** à un autre dôme, lancés après les siens ; celles non prises te reviennent. |
 | **Transférer** | Un joueur | Données à ce joueur, qui les reçoit **dans le tour** (avant les attaques). |
 | **Enchère** | La réserve | Si tu gagnes un lot : mise payée, lot de Razoonium reçu. Sinon : mise remboursée. |
 | **Raffiner** | Soi-même | Converties en Razoonium (3 pour 1) en fin de tour, après les attaques (la mise est pillable). |
@@ -67,8 +67,8 @@ Les Batteries que tu n'engages dans aucune action forment ta **réserve libre**.
 ## ⚛️ 4. Générer
 
 - La mise est consommée et remplacée en fin de tour par $\lfloor \text{mise} \times \text{multiplicateur} \rfloor$ (arrondi à l'inférieur).
-- Multiplicateur : **×3** normalement, **×5** avec un Pacte scellé.
-- La Météo *Abondance* le fait passer à **×4** (et à **×6** avec un Pacte scellé).
+- Multiplicateur : **×3** par temps *Calme*.
+- La Météo *Grisaille* le fait tomber à **×2**, la Météo *Abondance* le fait passer à **×4**.
 - La mise en Génération **peut être pillée** (voir Attaque). Le rendement est calculé sur ce qu'il en reste après les attaques.
 
 > **Exemple** : tu mets 6 en Génération. Sans attaque, tu récupères 6 × 3 = **18** (+12). Si un attaquant te pille 2 Batteries dans ta Génération, tu ne récupères que 4 × 3 = **12**.
@@ -77,44 +77,47 @@ Les Batteries que tu n'engages dans aucune action forment ta **réserve libre**.
 
 ## 🛡️ 5. Défendre
 
-- Chaque Batterie en Défense crée **1 point de Bouclier**.
-- Un Bouclier posé le jour J est **actif dès ce tour** et protège pendant les tours J, J+1 et J+2, puis il expire.
-- Chaque point de dégât détruit 1 point de Bouclier. Les Boucliers **les plus anciens sont détruits en premier**.
+- Chaque Batterie en Défense te donne **1 dé de défense** pour ce tour.
+- Le Bouclier ne dure que **le tour où il est posé**.
+- Chaque dé de défense perdant fait perdre sa Batterie au profit de l'attaquant ; chaque dé gagnant te rapporte la Batterie de l'attaquant.
+- Les Batteries de Bouclier non prises (dés gagnants ou non utilisés) **te reviennent** en fin de tour.
 - Les Boucliers ne sont pas pillables.
 
 ---
 
 ## ⚔️ 6. Attaquer & Piller
 
-Tu ne peux attaquer qu'**un seul joueur par tour**. Quand tu l'attaques avec $X$ Batteries :
+Tu ne peux attaquer qu'**un seul joueur par tour**. Chaque Batterie d'attaque te donne **1 dé** (dés à 6 faces).
 
-1. **Casser le Bouclier** : les Batteries qui servent à détruire le Bouclier de la cible sont **perdues**.
-2. **Dégâts nets** : les Batteries qui dépassent le Bouclier te sont **restituées** en fin de tour.
-3. **Pillage** : chaque Batterie de dégâts nets **vole 1 Batterie** à la cible, dans cet ordre :
+1. **Lancer** : attaquant et défenseur lancent leurs dés et les trient du plus fort au plus faible.
+2. **Duels** : on compare les dés **un à un, dans l'ordre** (le meilleur contre le meilleur…), autant de fois que le camp qui a le moins de dés.
+   - Dé d'attaque **strictement plus fort** : l'attaquant garde sa Batterie et **prend la Batterie de Bouclier**.
+   - Sinon (**égalité comprise**) : le défenseur **prend la Batterie d'attaque**.
+3. **Pillage** : chaque dé d'attaque **en trop** te rend sa Batterie et **vole 1 Batterie** à la cible, dans cet ordre :
    1. d'abord dans sa **réserve libre** (y compris les mises d'Enchère remboursées et les transferts reçus ce tour) ;
    2. puis dans sa **mise en Génération** ;
    3. puis dans sa **mise en Raffinage**.
 4. On ne peut voler que ce que la cible possède : ses Boucliers, son Razoonium déjà acquis, ses mises d'Enchère gagnantes, ses attaques et ses transferts envoyés sont hors d'atteinte.
 
-**Plusieurs attaquants sur la même cible** : leurs attaques s'additionnent pour casser le Bouclier. Les dégâts nets et le butin sont ensuite répartis au **prorata** de la mise de chacun.
+**Plusieurs attaquants sur la même cible** : tous leurs dés d'attaque sont triés ensemble face aux dés de défense. À dé égal, passe d'abord celui qui a lancé le plus de dés, puis celui qui a le moins de Batteries. Les dés en trop sont les plus faibles du lot.
 
-> **Exemple** : tu attaques Nat avec **7**. Nat a un Bouclier de **3**, une réserve libre de **2** et **5** en Génération.
-> - 3 de tes Batteries cassent son Bouclier et sont perdues.
-> - Les 4 restantes te reviennent et volent 4 Batteries : 2 dans sa réserve, puis 2 dans sa Génération.
-> - Tu termines le tour avec **+8** (4 restituées + 4 volées) pour 7 engagées.
-> - Nat génère sur les 3 qui restent : 3 × 3 = 9 au lieu de 15.
+> **Exemple** : tu attaques Nat avec **4**, Nat défend avec **2** et a une réserve libre de **3**.
+> - Tes dés : 6 · 4 · 3 · 1. Ceux de Nat : 5 · 4.
+> - 6 contre 5 : tu gagnes et prends 1 Batterie de Bouclier.
+> - 4 contre 4 : égalité, Nat prend 1 de tes Batteries.
+> - Tes 2 dés en trop (3 et 1) te reviennent et pillent 2 Batteries dans la réserve de Nat.
+> - Tu termines le tour à **+6** pour 4 engagées (3 récupérées + 1 Bouclier + 2 pillées). Nat récupère 1 Bouclier et gagne 1 Batterie.
 
 ---
 
-## 🤝 7. Le Pacte
+## 🤝 7. Protéger un autre dôme
 
-- Proposer un Pacte à un joueur **ne coûte aucune Batterie**. On ne peut proposer qu'un seul Pacte par tour.
-- **Engagement** : que le Pacte soit accepté ou non, tu **ne peux ni Attaquer ni Défendre** ce tour.
-- **Exposition** : pendant ce tour, **tes Boucliers sont inactifs**. Toute attaque contre toi pille directement ta réserve puis ta Génération, sans rien casser. Tes Boucliers ne sont pas abîmés et redeviennent actifs au tour suivant.
-- **Pacte scellé** : uniquement si les deux joueurs se proposent mutuellement le Pacte (A → B et B → A). Les deux alliés ont alors une Génération **×5** (×6 en Abondance).
-- **Pacte non réciproque** : pas de bonus, mais l'engagement et l'exposition s'appliquent quand même.
-
-> **Trahison** : proposer un Pacte, c'est se mettre à nu. Ton « allié » peut ne pas jouer le Pacte et t'attaquer, ou prévenir un troisième joueur et partager le butin avec lui par Transfert.
+- Tu peux envoyer des Batteries en **Bouclier sur un autre dôme** : chacune lui donne 1 dé de défense de plus, pour ce tour.
+- Les dés du dôme attaqué sont comparés **en premier** (du plus fort au plus faible), puis ceux de ses protecteurs (chacun du plus fort au plus faible).
+- Si un de tes dés perd son duel, l'attaquant **te prend** la Batterie. S'il gagne, c'est **toi** qui empoches la Batterie d'attaque.
+- Les Batteries non prises (dés gagnants ou non utilisés) **te reviennent** en fin de tour, même si le dôme protégé n'est pas attaqué.
+- Tu ne peux pas protéger le dôme que tu attaques. Tu peux te défendre et protéger quelqu'un dans le même tour.
+- Plusieurs protecteurs : passe d'abord celui qui a envoyé le plus de Batteries, puis celui qui en possède le moins.
 
 ---
 
@@ -148,21 +151,20 @@ Un dé à 6 faces est lancé à chaque résolution. Personne ne connaît la mét
 
 | Dé | Météo | Effet |
 | :--- | :--- | :--- |
-| 1-2 | **Calme** | Aucun effet. |
-| 3-4 | **Tempête** | Tous les dômes perdent **1 Batterie supplémentaire**. |
-| 5-6 | **Abondance** | Génération **×4** au lieu de ×3 ; Pacte scellé **×6** au lieu de ×5. |
+| 1 | **Grisaille** | Génération **×2** au lieu de ×3. |
+| 2-5 | **Calme** | Génération **×3**. |
+| 6 | **Abondance** | Génération **×4** au lieu de ×3. |
 
 ---
 
 ## ⚙️ 11. Ordre de Résolution d'un Tour
 
 1. **Coût de vie** : −1 Batterie pour chaque dôme.
-2. **Météo** : lancer du dé (et −1 Batterie de plus en cas de Tempête).
-3. **Pactes** : vérification de la réciprocité. Les attaques et défenses de ceux qui ont proposé un Pacte sont annulées, et leurs Boucliers sont inactifs pour ce tour.
-4. **Boucliers** : les nouveaux Boucliers sont posés (actifs immédiatement).
-5. **Enchères** : attribution des lots de Razoonium ; les mises perdantes reviennent dans la réserve.
-6. **Transferts** : les Batteries transférées arrivent dans la réserve du destinataire.
-7. **Attaques** : destruction des Boucliers (les plus anciens d'abord), puis pillage de la réserve libre, puis de la Génération, puis du Raffinage.
-8. **Expiration des Boucliers** posés il y a 3 tours.
-9. **Raffinage & Génération** : le Razoonium est crédité et le rendement de Génération calculé, chacun sur sa mise restante. Les Batteries d'attaque restituées et le butin sont ajoutés.
-10. **Bilan** : tout dôme à 0 Batterie ou moins s'éteint.
+2. **Météo** : lancer du dé, qui fixe le multiplicateur de Génération.
+3. **Enchères** : attribution des lots de Razoonium ; les mises perdantes reviennent dans la réserve.
+4. **Transferts** : les Batteries transférées arrivent dans la réserve du destinataire.
+5. **Protections** : les Boucliers envoyés rejoignent les dômes protégés.
+6. **Attaques** : lancers de dés et duels, puis pillage par les dés en trop (réserve libre, puis Génération, puis Raffinage).
+7. **Boucliers** : les Batteries de Bouclier non prises reviennent à leur propriétaire.
+8. **Raffinage & Génération** : le Razoonium est crédité et le rendement de Génération calculé, chacun sur sa mise restante. Les Batteries gagnées et le butin sont ajoutés.
+9. **Bilan** : tout dôme à 0 Batterie ou moins s'éteint.

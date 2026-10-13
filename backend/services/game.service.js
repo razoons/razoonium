@@ -36,7 +36,6 @@ function viewFor(game, id, uid, ordersDocs) {
     minPlayers: MIN_PLAYERS,
     maxPlayers: engine.MAX_PLAYERS,
     maxDays: game.maxDays ?? engine.MAX_DAYS,
-    shieldDuration: engine.SHIELD_DURATION,
     palette: engine.COLORS,
     emblems: engine.EMBLEMS,
     players: game.players,
@@ -74,7 +73,7 @@ function summaryFor(game, id, uid) {
 
 // ── Notifications ────────────────────────────────────────────────────────────
 
-const WEATHER_TXT = { calm: '☾ Calme', storm: '⚡ Tempête', abundance: '☀ Abondance' };
+const WEATHER_TXT = { gloom: '☁ Grisaille', calm: '☾ Calme', abundance: '☀ Abondance' };
 const signed = (n) => (n >= 0 ? `+${n}` : `${n}`);
 
 function turnMessages(id, game) {
