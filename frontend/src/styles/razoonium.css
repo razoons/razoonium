@@ -275,15 +275,11 @@ select option{background:#0a1226}
 .stat.res .cells i{background:color-mix(in srgb, var(--a) 12%, transparent);border-color:color-mix(in srgb, var(--a) 25%, transparent)}
 .stat.res .cells i.on{background:var(--a);box-shadow:0 0 6px var(--a)}
 .stat.res .cells i.lock{background:color-mix(in srgb, var(--a) 30%, transparent);border-color:var(--a);box-shadow:none}
-.stat.res .layer:not(.old){border-color:var(--a);color:var(--a)}
 .cells{display:flex;flex-wrap:wrap;gap:3px;margin-top:8px}
 .cells i{width:10px;height:16px;background:rgba(157,255,74,.12);border:1px solid rgba(157,255,74,.25)}
 .cells i.on{background:var(--lime);box-shadow:0 0 6px var(--lime)}
 .cells i.lock{background:var(--magenta);box-shadow:0 0 6px var(--magenta);border-color:var(--magenta)}
 
-.layers{display:flex;gap:4px;margin-top:8px;flex-wrap:wrap}
-.layer{font-size:12px;padding:2px 6px;border:1px solid var(--cyan);color:var(--cyan);white-space:nowrap}
-.layer.old{border-color:var(--amber);color:var(--amber)}
 
 .actions{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;margin-top:18px}
 .acard{
@@ -326,8 +322,6 @@ select option{background:#0a1226}
 .tile .ic{width:48px;height:48px;display:grid;place-items:center;font-size:24px;color:var(--a);border:1px solid var(--a);transform:rotate(45deg);margin:4px 0 6px;
   box-shadow:0 0 12px color-mix(in srgb, var(--a) 30%, transparent)}
 .tile.on .ic{background:color-mix(in srgb, var(--a) 20%, transparent)}
-.tile.blocked{opacity:.3;cursor:not-allowed;filter:grayscale(.6);box-shadow:none}
-.tile.blocked:hover{border-color:color-mix(in srgb, var(--a) 25%, transparent);box-shadow:none}
 .tile .ic > *{transform:rotate(-45deg)}
 .tile .nm{font-family:'Orbitron';font-weight:700;font-size:11px;letter-spacing:.12em;color:var(--a);text-transform:uppercase}
 .tile .sm{font-size:13px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}

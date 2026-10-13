@@ -124,16 +124,9 @@
               </div>
             </div>
             <div class="stat res" :style="{ '--a': actionColor.def }">
-              <div class="k"><v-icon class="mi" size="1.1em" :icon="ICONS.shield" /> Bouclier</div>
-              <div class="v">{{ shieldTotal(me) }}</div>
-              <div v-if="draft.pact != null && shieldTotal(me)" class="s"><v-icon class="mi" size="1.1em" :icon="ICONS.shieldOff" /> inactif ce tour (pacte)</div>
-              <div class="layers">
-                <span
-                  v-for="(l, i) in me.shields" :key="i"
-                  :class="['layer', { old: shieldLeft(l) <= 1 }]"
-                >{{ l.amount }} · {{ shieldLeft(l) }}t</span>
-                <span v-if="!me.shields.length" class="empty">aucun</span>
-              </div>
+              <div class="k"><v-icon class="mi" size="1.1em" :icon="ICONS.shield" /> Bouclier ce tour</div>
+              <div class="v">{{ draft.def }}</div>
+              <div class="s">1 batterie = 1 dé · revient si elle n'est pas prise</div>
             </div>
           </div>
 
@@ -148,7 +141,6 @@
                 <span class="num teal"><v-icon class="mi" size="1.1em" :icon="ICONS.razoonium" /> {{ g.players[id].razoonium || 0 }}</span>
                 <template v-if="g.players[id].alive">
                   <span class="num" :style="{ color: actionColor.gen }"><v-icon class="mi" size="1.1em" :icon="ICONS.battery" /> {{ g.players[id].batteries }}</span>
-                  <span class="num" :style="{ color: actionColor.def }"><v-icon class="mi" size="1.1em" :icon="ICONS.shield" /> {{ shieldTotal(g.players[id]) }}</span>
                 </template>
                 <span v-else class="out"><v-icon class="mi" size="1.1em" :icon="ICONS.dead" /> jour {{ g.players[id].elimDay }}</span>
               </div>
@@ -163,14 +155,13 @@
             <div class="tiles">
               <button
                 v-for="a in ACTIONS" :key="a.key"
-                :class="['tile', { on: isOn(a), blocked: blockedByPact(a) }]" :style="{ '--a': a.color }"
-                :disabled="blockedByPact(a)" :title="blockedByPact(a) ? 'Interdit pendant un pacte' : ''"
+                :class="['tile', { on: isOn(a) }]" :style="{ '--a': a.color }"
                 @click="openKey = a.key"
               >
                 <span class="ic"><v-icon :icon="a.icon" /></span>
                 <span class="nm">{{ a.name }}</span>
                 <span class="sm">{{ summary(a) }}</span>
-                <span v-if="!a.noAmount && draft[a.key] > 0" class="badge">{{ draft[a.key] }}</span>
+                <span v-if="draft[a.key] > 0" class="badge">{{ draft[a.key] }}</span>
               </button>
             </div>
 
@@ -188,7 +179,7 @@
                   </span>
                   <span v-if="!g.lots.length" class="empty">Aucun lot aujourd'hui</span>
                 </div>
-                <div v-if="!current.noAmount" class="stepper">
+                <div class="stepper">
                   <button :disabled="!editable || draft[current.key] <= 0" @click="step(current.key, -1, $event)">−</button>
                   <div class="val">{{ draft[current.key] }}</div>
                   <button :disabled="!editable || remaining <= 0" @click="step(current.key, 1, $event)">+</button>
@@ -202,13 +193,12 @@
                     <span class="tn"><v-icon v-if="o.p.icon" class="mi" size="1em" :icon="o.p.icon" /> {{ o.p.name }}</span>
                     <span class="ts">
                       <v-icon class="mi" size="1em" :icon="ICONS.battery" /> {{ o.p.batteries }}
-                      <v-icon class="mi" size="1em" :icon="ICONS.shield" /> {{ shieldTotal(o.p) }}
                     </span>
                   </button>
                 </div>
                 <div class="pv">{{ preview(current.key) }}</div>
                 <div class="mfoot">
-                  <span v-if="!current.noAmount" class="muted">Disponibles : <b class="lime">{{ remaining }}</b> <v-icon class="mi" size="1.1em" :icon="ICONS.battery" /></span>
+                  <span class="muted">Disponibles : <b class="lime">{{ remaining }}</b> <v-icon class="mi" size="1.1em" :icon="ICONS.battery" /></span>
                   <span v-if="!editable" class="muted">Ordres verrouillés</span>
                   <div style="display:flex;gap:8px;margin-left:auto">
                     <button
@@ -261,7 +251,6 @@
               <span class="num teal"><v-icon class="mi" size="1.1em" :icon="ICONS.razoonium" /> {{ g.players[id].razoonium || 0 }}</span>
               <template v-if="g.players[id].alive">
                 <span class="num" :style="{ color: actionColor.gen }"><v-icon class="mi" size="1.1em" :icon="ICONS.battery" /> {{ g.players[id].batteries }}</span>
-                <span class="num" :style="{ color: actionColor.def }"><v-icon class="mi" size="1.1em" :icon="ICONS.shield" /> {{ shieldTotal(g.players[id]) }}</span>
               </template>
               <span v-else class="out"><v-icon class="mi" size="1.1em" :icon="ICONS.dead" /> jour {{ g.players[id].elimDay }}</span>
             </div>
@@ -272,12 +261,10 @@
           <div class="tabs">
             <button :class="{ on: chartTab === 'r' }" :style="{ '--a': actionColor.ref }" @click="chartTab = 'r'"><v-icon class="mi" size="1.1em" :icon="ICONS.razoonium" /> Razoonium</button>
             <button :class="{ on: chartTab === 'b' }" :style="{ '--a': actionColor.gen }" @click="chartTab = 'b'"><v-icon class="mi" size="1.1em" :icon="ICONS.battery" /> Batteries</button>
-            <button :class="{ on: chartTab === 's' }" :style="{ '--a': actionColor.def }" @click="chartTab = 's'"><v-icon class="mi" size="1.1em" :icon="ICONS.shield" /> Boucliers</button>
           </div>
           <EvolutionChart
             :key="chartTab" :players="g.players" :history="g.history"
             :max-days="g.maxDays" :metric="chartTab"
-            :projection="chartTab === 's' && g.status === 'running'" :shield-duration="g.shieldDuration"
           />
           <p v-if="g.history.length < 2" class="empty" style="margin:12px 0 0">
             Les courbes se dessinent à partir de la première résolution.
@@ -334,7 +321,7 @@ import { useRoute, useRouter } from 'vue-router';
 import api from '../api';
 import { auth } from '../stores/auth';
 import { toast } from '../stores/toast';
-import { ACTIONS, WEATHER, ICONS, emptyOrders, spent, shieldTotal, timeLeft } from '../game';
+import { ACTIONS, WEATHER, ICONS, emptyOrders, spent, timeLeft } from '../game';
 import EvolutionChart from '../components/EvolutionChart.vue';
 import LogLine from '../components/LogLine.vue';
 
@@ -389,17 +376,15 @@ const endSummary = computed(() => {
   return `${g.value.maxDays} jours écoulés. ${win.name} l'emporte avec ${win.razoonium || 0} Razoonium.`;
 });
 
-// Classement : vivants d'abord, puis Razoonium, batteries, bouclier, jour d'élimination
+// Classement : vivants d'abord, puis Razoonium, batteries, jour d'élimination
 const standings = computed(() => g.value.ranking ?? g.value.players
   .map((p, id) => ({ p, id }))
   .sort((a, b) => (b.p.alive - a.p.alive) || (b.p.razoonium || 0) - (a.p.razoonium || 0) || b.p.batteries - a.p.batteries
-    || shieldTotal(b.p) - shieldTotal(a.p) || (b.p.elimDay || 0) - (a.p.elimDay || 0))
+    || (b.p.elimDay || 0) - (a.p.elimDay || 0))
   .map((x) => x.id));
 
 // Couleurs des actions, réutilisées pour les ressources (batteries = Générer, bouclier = Défendre)
 const actionColor = Object.fromEntries(ACTIONS.map((a) => [a.key, a.color]));
-
-const shieldLeft = (l) => g.value.shieldDuration - (g.value.day - l.day);
 
 function apply(data) {
   const prev = g.value;
@@ -456,6 +441,8 @@ function submit() {
   const o = draft.value;
   if (o.atk > 0 && o.atkTarget == null) return toast('⚠ Attaque sans cible');
   if (o.xfer > 0 && o.xferTarget == null) return toast('⚠ Transfert sans cible');
+  if (o.prot > 0 && o.protTarget == null) return toast('⚠ Protection sans cible');
+  if (o.prot > 0 && o.atk > 0 && o.protTarget === o.atkTarget) return toast('⚠ Tu ne peux pas protéger le dôme que tu attaques');
   dirty.value = false;
   call(() => api.put(`/games/${props.id}/orders`, { orders: o, ready: true }), 'Ordres verrouillés');
 }
@@ -500,36 +487,25 @@ async function share() {
   } catch { /* partage annulé */ }
 }
 
-// Proposer un pacte interdit l'attaque et la défense ce tour, réciproque ou non
-const blockedByPact = (a) => draft.value.pact != null && (a.key === 'atk' || a.key === 'def');
-
 function pickTarget(a, id) {
   draft.value[a.target] = id;
   dirty.value = true;
-  const o = draft.value;
-  if (a.key === 'pact' && o.pact != null && (o.atk || o.def)) {
-    o.atk = 0;
-    o.def = 0;
-    o.atkTarget = null;
-    toast('Pacte : attaque et défense retirées');
-  }
 }
 
 // Annule l'action ciblée : cible et mise
 function abandon(a) {
   draft.value[a.target] = null;
-  if (!a.noAmount) draft.value[a.key] = 0;
+  draft.value[a.key] = 0;
   dirty.value = true;
 }
 
-const isOn = (a) => (a.noAmount ? draft.value.pact != null : draft.value[a.key] > 0);
+const isOn = (a) => draft.value[a.key] > 0;
 
 /* Résumé court affiché sous l'icône */
 function summary(a) {
   const o = draft.value;
-  if (blockedByPact(a)) return '∞ pacte';
   if (!isOn(a)) return a.tag;
-  if (!a.target) return { gen: `→ +${o.gen * 3}`, def: `bouclier +${o.def}`, bid: `mise ${o.bid}`, ref: `score +${Math.floor(o.ref / 3)}` }[a.key];
+  if (!a.target) return { gen: `→ +${o.gen * 3}`, def: `${o.def} dé(s)`, bid: `mise ${o.bid}`, ref: `score +${Math.floor(o.ref / 3)}` }[a.key];
   const t = o[a.target];
   return t == null ? '⚠ cible ?' : `→ ${g.value.players[t].name}`;
 }
@@ -538,15 +514,16 @@ function preview(key) {
   const o = draft.value;
   const nm = (id) => (id == null ? '' : g.value.players[id].name);
   switch (key) {
-    case 'gen': return o.gen ? `→ +${o.gen * 3} (×3) · +${o.gen * 4} si Abondance · +${o.gen * 5} si Pacte` : '';
-    case 'def': return o.def ? `→ Bouclier ${shieldTotal(me.value)} → ${shieldTotal(me.value) + o.def}` : '';
+    case 'gen': return o.gen ? `→ +${o.gen * 3} (×3) · +${o.gen * 2} si Grisaille · +${o.gen * 4} si Abondance` : '';
+    case 'def': return o.def ? `→ ${o.def} dé(s) de défense ce tour · les batteries non prises te reviennent` : '';
     case 'atk':
       if (!o.atk) return '';
       if (o.atkTarget == null) return '⚠ choisis une cible';
-      return `→ ${nm(o.atkTarget)} · bouclier visible ${shieldTotal(g.value.players[o.atkTarget])}`;
-    case 'pact':
-      if (o.pact == null) return '';
-      return `→ si ${nm(o.pact)} accepte aussi : génération ×5 · tes boucliers sont inactifs ce tour`;
+      return `→ ${nm(o.atkTarget)} · ${o.atk} dé(s) d'attaque · les dés en trop pillent`;
+    case 'prot':
+      if (!o.prot) return '';
+      if (o.protTarget == null) return '⚠ choisis une cible';
+      return `→ ${o.prot} dé(s) de défense pour ${nm(o.protTarget)} · les batteries non prises te reviennent`;
     case 'xfer':
       if (!o.xfer) return '';
       return o.xferTarget == null ? '⚠ choisis une cible' : `→ ${o.xfer} pour ${nm(o.xferTarget)}`;
