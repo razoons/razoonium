@@ -10,6 +10,8 @@ router.post('/', ctrl.create);
 router.post('/join', ctrl.join);
 router.get('/:id', ctrl.get);
 router.delete('/:id', ctrl.remove);
+router.get('/:id/candidates', ctrl.candidates);
+router.post('/:id/players', ctrl.addPlayer);
 router.delete('/:id/membership', ctrl.leave);
 router.put('/:id/look', ctrl.look);
 router.post('/:id/start', ctrl.start);

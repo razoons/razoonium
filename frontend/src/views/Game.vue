@@ -23,6 +23,16 @@
             <span v-if="p.uid === g.hostId" class="status lobby">HÔTE</span>
           </div>
         </div>
+        <form
+          v-if="isHost && g.players.length < g.maxPlayers"
+          style="display:flex;gap:10px;margin-bottom:20px" @submit.prevent="addPlayer"
+        >
+          <select v-model="newPlayer" required @focus="loadCandidates">
+            <option value="" disabled>{{ candidates.length ? 'Choisir un joueur…' : 'Aucun joueur à ajouter' }}</option>
+            <option v-for="c in candidates" :key="c" :value="c">{{ c }}</option>
+          </select>
+          <button class="btn primary" :disabled="!newPlayer || busy">Ajouter</button>
+        </form>
         <template v-if="g.palette">
           <div class="ptitle">Ton dôme</div>
           <div class="look" :style="{ '--c': me.color }">
@@ -414,6 +424,24 @@ async function load() {
 
 const setLook = (look) => call(() => api.put(`/games/${props.id}/look`, look));
 
+const newPlayer = ref('');
+const candidates = ref([]);
+async function loadCandidates() {
+  try {
+    candidates.value = (await api.get(`/games/${props.id}/candidates`)).data;
+  } catch { /* liste indisponible : on garde la précédente */ }
+}
+async function addPlayer() {
+  const name = newPlayer.value;
+  const before = g.value.players.length;
+  await call(() => api.post(`/games/${props.id}/players`, { username: name }));
+  if (g.value.players.length > before) {
+    toast(`${name} a été ajouté`);
+    newPlayer.value = '';
+    candidates.value = candidates.value.filter((c) => c !== name);
+  }
+}
+
 async function call(request, success) {
   busy.value = true;
   try {
@@ -541,7 +569,7 @@ function onVisible() {
 }
 
 onMounted(() => {
-  load();
+  load().then(() => { if (isHost.value && g.value?.status === 'lobby') loadCandidates(); });
   poll = setInterval(() => { if (document.visibilityState === 'visible') load(); }, POLL_MS);
   clock = setInterval(() => {
     now.value = Date.now();

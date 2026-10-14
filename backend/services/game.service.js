@@ -237,6 +237,51 @@ async function joinGame(user, code) {
   return loadView(ref, user.uid);
 }
 
+/* Joueurs inscrits que l'hôte peut encore ajouter à la partie (ceux qui n'y sont pas déjà) */
+async function listCandidates(user, id) {
+  const snap = await games().doc(id).get();
+  if (!snap.exists) throw new GameError(404, 'Partie introuvable.');
+  const game = snap.data();
+  if (game.hostId !== user.uid) throw new GameError(403, 'Seul l\'hôte peut ajouter un joueur.');
+  if (game.status !== 'lobby') return [];
+  const users = await db.collection('users').select('username').get();
+  return users.docs
+    .filter((d) => !game.playerIds.includes(d.id))
+    .map((d) => d.data().username)
+    .sort((a, b) => a.localeCompare(b, 'fr', { sensitivity: 'base' }));
+}
+
+/* L'hôte ajoute directement un joueur inscrit à la partie, par son pseudo */
+async function addPlayer(user, id, username) {
+  const ref = games().doc(id);
+  const key = String(username || '').trim().toLowerCase();
+  if (!key) throw new GameError(400, 'Pseudo manquant.');
+  const userSnap = await db.collection('users').doc(key).get();
+  if (!userSnap.exists) throw new GameError(404, 'Aucun joueur avec ce pseudo.');
+  const added = await db.runTransaction(async (tx) => {
+    const snap = await tx.get(ref);
+    if (!snap.exists) throw new GameError(404, 'Partie introuvable.');
+    const game = snap.data();
+    if (game.hostId !== user.uid) throw new GameError(403, 'Seul l\'hôte peut ajouter un joueur.');
+    if (game.status !== 'lobby') throw new GameError(409, 'La partie a déjà commencé.');
+    if (game.playerIds.includes(userSnap.id)) throw new GameError(409, 'Ce joueur fait déjà partie de la partie.');
+    if (game.players.length >= engine.MAX_PLAYERS) throw new GameError(409, 'La partie est complète.');
+    game.playerIds.push(userSnap.id);
+    game.players.push({ uid: userSnap.id, name: userSnap.data().username, ...engine.freeLook(game.players) });
+    tx.update(ref, { playerIds: game.playerIds, players: game.players });
+    return game;
+  });
+  await push.sendMany([{
+    uid: userSnap.id,
+    payload: {
+      title: `➕ ${added.name}`,
+      body: `${user.name} t'a ajouté à sa partie.`,
+      url: `/game/${id}`, tag: `game-${id}`,
+    },
+  }]);
+  return loadView(ref, user.uid);
+}
+
 async function leaveGame(user, id) {
   const ref = games().doc(id);
   await db.runTransaction(async (tx) => {
@@ -359,5 +404,5 @@ async function tick() {
 }
 
 module.exports = {
-  GameError, listMyGames, createGame, joinGame, leaveGame, setLook, deleteGame, launchGame, getGame, submitOrders, tick,
+  GameError, listMyGames, createGame, joinGame, listCandidates, addPlayer, leaveGame, setLook, deleteGame, launchGame, getGame, submitOrders, tick,
 };

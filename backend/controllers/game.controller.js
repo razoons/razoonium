@@ -12,6 +12,14 @@ async function join(req, res) {
   res.json(await games.joinGame(req.user, req.body?.code));
 }
 
+async function candidates(req, res) {
+  res.json(await games.listCandidates(req.user, req.params.id));
+}
+
+async function addPlayer(req, res) {
+  res.json(await games.addPlayer(req.user, req.params.id, req.body?.username));
+}
+
 async function get(req, res) {
   res.json(await games.getGame(req.user, req.params.id));
 }
@@ -43,4 +51,4 @@ async function tick(_req, res) {
   res.json(await games.tick());
 }
 
-module.exports = { list, create, join, get, leave, look, remove, start, orders, tick };
+module.exports = { list, create, join, candidates, addPlayer, get, leave, look, remove, start, orders, tick };
