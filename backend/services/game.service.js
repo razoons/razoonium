@@ -40,9 +40,9 @@ function viewFor(game, id, uid, ordersDocs) {
     emblems: engine.EMBLEMS,
     players: game.players,
     day: game.day ?? 0,
-    lots: game.lots ?? [],
+    lotCount: (game.lots ?? []).length, // contenu des lots caché jusqu'à la résolution
     lastWeather: game.lastWeather ?? null,
-    log: game.log ?? [],
+    log: engine.logFor(game.log ?? [], me), // seules les lignes qui concernent ce joueur
     history: game.history ?? [],
     ranking: game.ranking ?? null,
     deadline: game.deadline ?? null,

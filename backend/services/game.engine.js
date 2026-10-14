@@ -6,6 +6,8 @@ const MIN_DAYS = 5;
 const MAX_DAYS_LIMIT = 30;
 const START_BATTERIES = 10;
 const REFINE_COST = 3; // batteries par Razoonium
+const LOOT_PER_DIE = 2; // batteries pillées par dé d'attaque en trop
+const MAX_DICE_SHOWN = 20; // au-delà de 2× ce nombre de dés dans un combat, le journal ne donne que le décompte des duels
 const MAX_PLAYERS = 8;
 
 const COLORS = [
@@ -36,26 +38,26 @@ function freeLook(players) {
 }
 
 const WEATHER = {
-  gloom:     { label: 'Grisaille', desc: 'Génération ×2' },
-  calm:      { label: 'Calme',     desc: 'Génération ×3' },
-  abundance: { label: 'Abondance', desc: 'Génération ×4' },
+  gloom:     { label: 'Grisaille', desc: 'Génération ×1,5' },
+  calm:      { label: 'Calme',     desc: 'Génération ×2' },
+  abundance: { label: 'Abondance', desc: 'Génération ×3' },
 };
 
 const rand = (a, b) => a + Math.floor(Math.random() * (b - a + 1));
-const emptyOrders = () => ({ gen: 0, def: 0, atk: 0, atkTarget: null, prot: 0, protTarget: null, xfer: 0, xferTarget: null, bid: 0, ref: 0 });
-const spent = (o) => o.gen + o.def + o.atk + o.prot + o.xfer + o.bid + o.ref;
+const emptyOrders = () => ({ gen: 0, def: 0, atk: 0, atkTarget: null, xfer: 0, xferTarget: null, bid: 0, ref: 0 });
+const spent = (o) => o.gen + o.def + o.atk + o.xfer + o.bid + o.ref;
 
-/* Lots du jour : quantités de Razoonium, triées par ordre décroissant */
+/* Lots du jour : quantités de Razoonium (cachées aux joueurs jusqu'à la résolution), triées par ordre décroissant */
 function rollLots(aliveCount) {
   const n = Math.floor(aliveCount / 2);
-  return Array.from({ length: n }, () => rand(2, 8)).sort((a, b) => b - a);
+  return Array.from({ length: n }, () => rand(0, 4)).sort((a, b) => b - a);
 }
 
 /* Valide et normalise des ordres reçus d'un client. Lève une Error si invalides. */
 function sanitizeOrders(raw, game, idx) {
   const me = game.players[idx];
   const o = emptyOrders();
-  for (const k of ['gen', 'def', 'atk', 'prot', 'xfer', 'bid', 'ref']) {
+  for (const k of ['gen', 'def', 'atk', 'xfer', 'bid', 'ref']) {
     const v = Number(raw?.[k] ?? 0);
     if (!Number.isInteger(v) || v < 0) throw new Error(`Valeur invalide pour "${k}".`);
     o[k] = v;
@@ -69,11 +71,8 @@ function sanitizeOrders(raw, game, idx) {
   };
   o.atkTarget = target('atkTarget');
   o.xferTarget = target('xferTarget');
-  o.protTarget = target('protTarget');
   if (o.atk > 0 && o.atkTarget === null) throw new Error('Attaque sans cible.');
   if (o.xfer > 0 && o.xferTarget === null) throw new Error('Transfert sans cible.');
-  if (o.prot > 0 && o.protTarget === null) throw new Error('Protection sans cible.');
-  if (o.prot > 0 && o.atk > 0 && o.protTarget === o.atkTarget) throw new Error('Tu ne peux pas protéger le dôme que tu attaques.');
   if (spent(o) > me.batteries) throw new Error('Pas assez de batteries.');
   return o;
 }
@@ -115,14 +114,15 @@ function startGame(game) {
  */
 function resolveTurn(game, ordersByIdx) {
   const day = game.day;
+  // Journal : les lignes publiques sont des chaînes ; les autres { t, to } ne sont vues que des joueurs listés
   const lines = [];
+  const say = (text, ...to) => lines.push(to.length ? { t: text, to } : text);
   const C = new Map();
 
   game.players.forEach((p, id) => {
     if (!p.alive) return;
     const o = { ...emptyOrders(), ...(ordersByIdx.get(id) || {}) };
     if (o.atk > 0 && (o.atkTarget == null || !game.players[o.atkTarget]?.alive)) o.atk = 0;
-    if (o.prot > 0 && (o.protTarget == null || !game.players[o.protTarget]?.alive)) o.prot = 0;
     if (o.xfer > 0 && (o.xferTarget == null || !game.players[o.xferTarget]?.alive)) o.xfer = 0;
     if (spent(o) > p.batteries) Object.assign(o, emptyOrders());
     C.set(id, { id, p, o, before: p.batteries, reserve: p.batteries - spent(o), genStake: o.gen, refStake: o.ref, gains: 0, shieldLost: 0 });
@@ -134,23 +134,25 @@ function resolveTurn(game, ordersByIdx) {
 
   // 2. Météo
   const die = rand(1, 6);
-  // 1 : Grisaille (×2) · 2 à 5 : Calme (×3) · 6 : Abondance (×4)
+  // 1 : Grisaille (×1,5) · 2 à 5 : Calme (×2) · 6 : Abondance (×3)
   const weather = die === 1 ? 'gloom' : die === 6 ? 'abundance' : 'calm';
-  const genMult = { gloom: 2, calm: 3, abundance: 4 }[weather];
+  const genMult = { gloom: 1.5, calm: 2, abundance: 3 }[weather];
   lines.push(`Météo (dé ${die}) : {w:${weather}} — ${WEATHER[weather].desc}.`);
 
-  // 3. Enchères : lots de Razoonium crédités directement (imprenables),
-  //    mises perdantes remboursées dans la réserve (pillable)
+  // 3. Enchères : tout le monde paie sa mise ; les lots, cachés jusqu'ici, sont révélés
+  //    et crédités directement en Razoonium (imprenable)
   const bidders = [...C.values()].filter((c) => c.o.bid > 0)
     .sort((a, b) => b.o.bid - a.o.bid || a.p.batteries - b.p.batteries);
-  if (!bidders.length && game.lots.length) lines.push('Enchères : aucune mise, les lots restent en réserve.');
+  if (game.lots.length) {
+    lines.push(`Enchères : lots révélés → ${game.lots.map((v) => `${v} {i:razoonium}`).join(' · ')}.`);
+    if (!bidders.length) lines.push('Enchères : aucune mise, les lots sont perdus.');
+  }
   bidders.forEach((c, i) => {
     if (i < game.lots.length) {
       c.p.razoonium = (c.p.razoonium || 0) + game.lots[i];
-      lines.push(`Enchère : {p:${c.id}} remporte le lot n°${i + 1} (+${game.lots[i]} {i:razoonium}) pour une mise de ${c.o.bid}.`);
+      say(`Enchère : {p:${c.id}} remporte le lot n°${i + 1} (+${game.lots[i]} {i:razoonium}) pour une mise de ${c.o.bid}.`, c.id);
     } else {
-      c.reserve += c.o.bid;
-      lines.push(`Enchère : {p:${c.id}} perd (mise de ${c.o.bid} remboursée).`);
+      say(`Enchère : {p:${c.id}} perd sa mise de ${c.o.bid} {i:battery}.`, c.id);
     }
   });
 
@@ -158,22 +160,16 @@ function resolveTurn(game, ordersByIdx) {
   C.forEach((c) => {
     if (c.o.xfer > 0) {
       C.get(c.o.xferTarget).reserve += c.o.xfer;
-      lines.push(`{p:${c.id}} transfère ${c.o.xfer} {i:battery} à {p:${c.o.xferTarget}}.`);
+      say(`{p:${c.id}} transfère ${c.o.xfer} {i:battery} à {p:${c.o.xferTarget}}.`, c.id, c.o.xferTarget);
     }
   });
 
-  // 5. Protections : des batteries envoyées en bouclier sur un autre dôme pour ce tour
-  C.forEach((c) => {
-    if (c.o.prot > 0) lines.push(`{p:${c.id}} protège {p:${c.o.protTarget}} avec ${c.o.prot} {i:battery}.`);
-  });
-
-  // 6. Attaques aux dés : 1 batterie d'attaque = 1 dé, 1 batterie de bouclier = 1 dé.
-  //    Les dés d'attaque de tous les assaillants d'une cible sont triés ensemble. Côté défense,
-  //    les dés du dôme attaqué passent d'abord, puis ceux de ses protecteurs ; chaque joueur trie
-  //    ses propres dés du plus fort au plus faible. On compare ensuite un à un, dans l'ordre.
+  // 5. Attaques aux dés : 1 batterie d'attaque = 1 dé, 1 batterie de bouclier = 1 dé (consommée).
+  //    Les dés d'attaque de tous les assaillants d'une cible sont triés ensemble, ceux de la défense
+  //    aussi, du plus fort au plus faible. On compare ensuite un à un, dans l'ordre.
   //    Attaque strictement plus forte : elle prend la batterie de bouclier ; sinon (égalité comprise)
-  //    le lanceur du dé de défense prend la batterie d'attaque.
-  //    Chaque dé d'attaque en trop rend sa batterie à son lanceur et pille 1 batterie à la cible.
+  //    la défense prend la batterie d'attaque.
+  //    Chaque dé d'attaque en trop rend sa batterie à son lanceur et pille LOOT_PER_DIE batteries à la cible.
   const byTarget = new Map();
   C.forEach((c) => {
     if (c.o.atk > 0) {
@@ -181,20 +177,22 @@ function resolveTurn(game, ordersByIdx) {
       byTarget.get(c.o.atkTarget).push(c);
     }
   });
-  // Entre plusieurs joueurs d'un même camp : le plus de dés lancés, puis le moins de batteries, puis le hasard
+  // Entre plusieurs attaquants : le plus de dés lancés, puis le moins de batteries, puis le hasard
   const tie = new Map([...C.keys()].map((id) => [id, Math.random()]));
   const priority = (dice) => (x, y) => dice(y) - dice(x) || x.before - y.before || tie.get(x.id) - tie.get(y.id);
   const roll = (c, k) => Array.from({ length: k }, () => ({ c, v: rand(1, 6) })).sort((x, y) => y.v - x.v);
-  const dieList = (dice) => dice.map((d) => d.v).join(' · ');
+  // Dés rendus en face-à-face par le client : {d:VpN} = dé de valeur V lancé par le joueur N ;
+  // {a:VpN} = dé d'attaque sans opposition, {b:VpN} = dé de défense resté sans adversaire
+  const dieTok = (d, k = 'd') => `{${k}:${d.v}p${d.c.id}}`;
+  const signed = (x) => (x > 0 ? `+${x}` : x < 0 ? `−${-x}` : '±0');
 
   byTarget.forEach((atks, tid) => {
     const tc = C.get(tid);
     const T = `{p:${tid}}`;
     const aPrio = priority((c) => c.o.atk);
     const aDice = atks.flatMap((a) => roll(a, a.o.atk)).sort((x, y) => y.v - x.v || aPrio(x.c, y.c));
-    const helpers = [...C.values()].filter((c) => c.o.prot > 0 && c.o.protTarget === tid).sort(priority((c) => c.o.prot));
-    const defenders = [tc, ...helpers].filter((c) => (c === tc ? c.o.def : c.o.prot) > 0);
-    const dDice = defenders.flatMap((c) => roll(c, c === tc ? c.o.def : c.o.prot));
+    const defenders = tc.o.def > 0 ? [tc] : [];
+    const dDice = roll(tc, tc.o.def);
     const n = Math.min(aDice.length, dDice.length);
 
     const res = new Map([...atks, ...defenders].map((c) => [c.id, { won: 0, lost: 0, extra: 0, loot: 0 }]));
@@ -212,74 +210,77 @@ function resolveTurn(game, ordersByIdx) {
         res.get(a.c.id).lost++;
         d.c.gains += 1; // le lanceur du dé de défense empoche la batterie d'attaque
       }
-      duels.push(`${a.v} contre ${d.v} → {p:${(a.v > d.v ? a : d).c.id}}`);
+      duels.push({ atkWon: a.v > d.v, text: `${dieTok(a)} contre ${dieTok(d)} → {p:${(a.v > d.v ? a : d).c.id}}` });
     }
-    // Pillage par les dés en trop, dans l'ordre du tri : réserve libre, puis génération, puis raffinage
-    const taken = { reserve: 0, gen: 0, ref: 0 };
+    // Pillage par les dés en trop, dans l'ordre du tri : génération, puis réserve libre, puis raffinage
+    const taken = { gen: 0, reserve: 0, ref: 0 };
     for (const d of aDice.slice(n)) {
       const r = res.get(d.c.id);
       r.extra++;
       d.c.gains += 1;
-      const from = tc.reserve > 0 ? 'reserve' : tc.genStake > 0 ? 'gen' : tc.refStake > 0 ? 'ref' : null;
-      if (!from) continue;
-      if (from === 'reserve') tc.reserve--;
-      else if (from === 'gen') tc.genStake--;
-      else tc.refStake--;
-      taken[from]++;
-      r.loot++;
-      d.c.gains += 1;
+      for (let k = 0; k < LOOT_PER_DIE; k++) {
+        const from = tc.genStake > 0 ? 'gen' : tc.reserve > 0 ? 'reserve' : tc.refStake > 0 ? 'ref' : null;
+        if (!from) break;
+        if (from === 'reserve') tc.reserve--;
+        else if (from === 'gen') tc.genStake--;
+        else tc.refStake--;
+        taken[from]++;
+        r.loot++;
+        d.c.gains += 1;
+      }
     }
 
-    // Journal : qui attaque, les dés, les duels, le pillage, puis le bilan de chacun
+    // Journal, visible des seuls participants : la cible ne montre ses dés qu'à elle-même
     const A = aDice.length;
-    lines.push(atks.length === 1
+    const all = [tid, ...atks.map((a) => a.id)];
+    say(atks.length === 1
       ? `{p:${atks[0].id}} attaque ${T} avec ${A} {i:battery}.`
-      : `${atks.map((a) => `{p:${a.id}} (${a.o.atk} {i:battery})`).join(', ').replace(/, ([^,]*)$/, ' et $1')} attaquent ensemble ${T}.`);
-    lines.push(`↳ Dés d'attaque : ${aDice.map((d) => (atks.length === 1 ? d.v : `${d.v} {p:${d.c.id}}`)).join(' · ')}.`);
-    if (!dDice.length) lines.push(`↳ ${T} n'a pas de bouclier.`);
-    else if (defenders.length === 1 && defenders[0] === tc) lines.push(`↳ Dés de défense de ${T} : ${dieList(dDice)}.`);
-    else {
-      const groups = defenders.map((c) => `{p:${c.id}} ${dieList(dDice.filter((d) => d.c === c))}`);
-      lines.push(`↳ Dés de défense, dans l'ordre : ${groups.join(', puis ')}.`);
-    }
-    if (duels.length) lines.push(`↳ Duels : ${duels.join(' ; ')}.`);
+      : `${atks.map((a) => `{p:${a.id}} (${a.o.atk} {i:battery})`).join(', ').replace(/, ([^,]*)$/, ' et $1')} attaquent ensemble ${T}.`, ...all);
+    // Face-à-face : duels, puis dés d'attaque sans opposition, et la somme en fin de ligne
+    // (duels gagnés par chaque camp, batteries pillées). Les dés de défense restés sans adversaire
+    // ne sont montrés qu'à la cible : ils révéleraient son bouclier.
+    const aw = duels.filter((x) => x.atkWon).length;
     const stolen = taken.reserve + taken.gen + taken.ref;
-    if (stolen) {
-      const parts = [
-        taken.reserve && `${taken.reserve} dans sa réserve`,
-        taken.gen && `${taken.gen} dans sa mise en génération`,
-        taken.ref && `${taken.ref} dans sa mise en raffinage`,
-      ].filter(Boolean);
-      const empty = stolen < A - n ? ' Il n\'y avait rien de plus à prendre.' : '';
-      lines.push(`↳ ${T} se fait piller ${stolen} {i:battery} : ${parts.join(', ')}.${empty}`);
-    } else if (A > n) {
-      lines.push(`↳ ${T} n'avait plus aucune batterie à piller.`);
+    const where = [
+      taken.gen && `${taken.gen} en Génération`,
+      taken.reserve && `${taken.reserve} en réserve`,
+      taken.ref && `${taken.ref} en Raffinage`,
+    ].filter(Boolean);
+    const lootSum = stolen
+      ? `${stolen} {i:battery} pillée(s) (${where.join(', ')})`
+      : A > n ? 'rien à piller (tout était engagé hors d\'atteinte)' : '0 {i:battery} pillée';
+    const sum = `= ${atks.length === 1 ? `{p:${atks[0].id}}` : 'attaque'} ${aw} · ${T} ${n - aw} · ${lootSum}`;
+    if (A + dDice.length > MAX_DICE_SHOWN * 2) {
+      say(`↳ Duels ${sum}`, ...all);
+    } else {
+      const shown = [...duels.map((x) => x.text), ...aDice.slice(n).map((d) => dieTok(d, 'a'))];
+      const spare = dDice.slice(n).map((d) => dieTok(d, 'b'));
+      const others = all.filter((id) => id !== tid);
+      if (spare.length) {
+        say(`↳ Duels : ${shown.join(' ')} ${sum}`, ...others);
+        say(`↳ Duels : ${[...shown, ...spare].join(' ')} ${sum}`, tid);
+      } else {
+        say(`↳ Duels : ${shown.join(' ')} ${sum}`, ...all);
+      }
     }
+    // Bilan net du combat : duels gagnés/perdus et butin, hors batteries d'attaque qui reviennent
     atks.forEach((a) => {
       const r = res.get(a.id);
-      const parts = [
-        r.won && `gagne ${r.won} duel(s) et prend ${r.won} {i:battery} de bouclier`,
-        r.lost && `perd ${r.lost} duel(s) et ${r.lost} {i:battery}`,
-        r.extra && `récupère ${r.extra} {i:battery} en trop${r.loot ? ` et en pille ${r.loot}` : ''}`,
-      ].filter(Boolean);
-      lines.push(`↳ {p:${a.id}} ${parts.join(', ')}.`);
+      const net = r.won - r.lost + r.loot;
+      say(`↳ {p:${a.id}} : ${signed(net)} {i:battery} (${r.won} duel(s) gagné(s), ${r.lost} perdu(s), ${r.loot} pillée(s))`, a.id, tid);
     });
-    defenders.forEach((c) => {
-      const r = res.get(c.id);
-      const unused = (c === tc ? c.o.def : c.o.prot) - r.won - r.lost;
-      const parts = [
-        r.lost && `perd ${r.lost} {i:battery} de bouclier`,
-        r.won && `empoche ${r.won} {i:battery} d'attaque`,
-        unused && `récupère ${unused} {i:battery} de bouclier non utilisée(s)`,
-      ].filter(Boolean);
-      lines.push(`↳ {p:${c.id}} ${parts.join(', ')}.`);
-    });
+    const tr = res.get(tid) || { won: 0, lost: 0 };
+    const tnet = tr.won - tr.lost - stolen;
+    say(`↳ ${T} : ${signed(tnet)} {i:battery} (${tr.won} {i:battery} d'attaque prise(s), ${tr.lost} {i:battery} de bouclier perdue(s), ${stolen} pillée(s))`, tid);
   });
 
-  // 7. Boucliers : ils ne durent que le tour ; toute batterie de bouclier non prise revient à son propriétaire
-  C.forEach((c) => { c.gains += c.o.def + c.o.prot - c.shieldLost; });
+  // 6. Boucliers : ils ne durent que le tour et sont consommés, qu'ils aient servi ou non
+  C.forEach((c) => {
+    const shield = c.o.def - c.shieldLost;
+    if (shield) say(`{p:${c.id}} consomme ses ${shield} {i:battery} de bouclier restante(s).`, c.id);
+  });
 
-  // 8. Génération & raffinage, calculés sur les mises restantes après pillage
+  // 7. Génération & raffinage, calculés sur les mises restantes après pillage
   //    (une fois raffiné, le Razoonium est définitif et imprenable)
   C.forEach((c) => {
     if (c.o.ref > 0) {
@@ -291,11 +292,11 @@ function resolveTurn(game, ordersByIdx) {
       const lost = c.o.ref - c.refStake;
       const lostNote = lost ? ` (mise de ${c.o.ref}, dont ${lost} volée(s))` : '';
       const restNote = rest ? `, ${rest} {i:battery} non raffinée(s) rendue(s)` : '';
-      lines.push(r
+      say(r
         ? `{p:${c.id}} raffine ${r * REFINE_COST} {i:battery} en ${r} {i:razoonium} Razoonium${lostNote}${restNote}.`
         : c.refStake
           ? `{p:${c.id}} ne raffine rien : il faut ${REFINE_COST} {i:battery} par Razoonium${lostNote}${restNote}.`
-          : `{p:${c.id}} ne raffine rien : ses ${c.o.ref} {i:battery} misées ont toutes été volées.`);
+          : `{p:${c.id}} ne raffine rien : ses ${c.o.ref} {i:battery} misées ont toutes été volées.`, c.id);
     }
     if (c.o.gen > 0) {
       const y = Math.floor(c.genStake * genMult);
@@ -303,9 +304,9 @@ function resolveTurn(game, ordersByIdx) {
       const lost = c.o.gen - c.genStake;
       const m = String(genMult).replace('.', ',');
       const calc = lost ? `mise de ${c.o.gen}, dont ${lost} volée(s) : ${c.genStake} × ${m}` : `${c.genStake} × ${m}`;
-      lines.push(c.genStake
+      say(c.genStake
         ? `{p:${c.id}} génère ${y} {i:battery} (${calc}).`
-        : `{p:${c.id}} ne génère rien : ses ${c.o.gen} {i:battery} misées ont toutes été volées.`);
+        : `{p:${c.id}} ne génère rien : ses ${c.o.gen} {i:battery} misées ont toutes été volées.`, c.id);
     }
   });
 
@@ -338,15 +339,26 @@ function resolveTurn(game, ordersByIdx) {
   return game;
 }
 
+/* Classement : le Razoonium d'abord, dômes éteints compris ; à égalité, un dôme allumé passe devant,
+   puis le plus de batteries, puis celui qui a tenu le plus longtemps */
 function ranking(game) {
   return game.players
     .map((p, id) => ({ id, p }))
-    .sort((a, b) => (b.p.alive - a.p.alive) || (b.p.razoonium || 0) - (a.p.razoonium || 0)
+    .sort((a, b) => (b.p.razoonium || 0) - (a.p.razoonium || 0) || (b.p.alive - a.p.alive)
       || b.p.batteries - a.p.batteries || (b.p.elimDay || 0) - (a.p.elimDay || 0))
     .map((x) => x.id);
 }
 
+/* Journal vu par le joueur d'index `me` : lignes publiques + celles qui le concernent
+   (le bilan reste complet : batteries et Razoonium sont publics) */
+function logFor(log, me) {
+  return log.map((e) => ({
+    ...e,
+    lines: e.lines.filter((l) => typeof l === 'string' || l.to.includes(me)).map((l) => (typeof l === 'string' ? l : l.t)),
+  }));
+}
+
 module.exports = {
   MAX_DAYS, MIN_DAYS, MAX_DAYS_LIMIT, START_BATTERIES, MAX_PLAYERS, COLORS, EMBLEMS, freeLook,
-  emptyOrders, sanitizeOrders, startGame, resolveTurn,
+  emptyOrders, sanitizeOrders, startGame, resolveTurn, ranking, logFor,
 };

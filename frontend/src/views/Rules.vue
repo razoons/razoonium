@@ -15,14 +15,13 @@
         <ul>
           <li>La partie dure <b>15 jours</b> (15 tours) par défaut ; le créateur peut choisir de 5 à 30 tours.</li>
           <li>À la fin, le joueur qui possède le plus de <b class="teal">Razoonium</b> gagne.</li>
-          <li>Les dômes encore allumés passent <b>toujours devant</b> les dômes éteints, quel que soit leur Razoonium.</li>
-          <li>Si un seul dôme reste allumé avant la fin, la partie s'arrête et ce joueur gagne.</li>
+          <li>Un dôme éteint reste classé <b>selon son Razoonium</b>, comme les autres : s'éteindre arrête ta progression, pas ton score.</li>
+          <li>Si un seul dôme reste allumé avant la fin, la partie s'arrête ; le classement se fait alors au Razoonium.</li>
         </ul>
         <h3>Classement</h3>
         <ol>
-          <li>Dômes encore allumés d'abord.</li>
-          <li>Puis le plus de <b class="teal">Razoonium</b>.</li>
-          <li>Égalité : le plus de Batteries.</li>
+          <li>Le plus de <b class="teal">Razoonium</b>, dômes éteints compris.</li>
+          <li>Égalité : un dôme encore allumé passe devant un dôme éteint, puis le plus de Batteries.</li>
           <li>Entre dômes éteints : celui qui a tenu le plus longtemps passe devant.</li>
         </ol>
       </div>
@@ -34,7 +33,7 @@
           <li>Stock initial : <b class="lime">10 Batteries</b>.</li>
           <li>C'est la ressource que tu dépenses pour agir. Elle peut être <b class="red">volée</b>.</li>
           <li>Coût de vie : ton dôme consomme <b>1 Batterie</b> à chaque tour.</li>
-          <li>Si tu finis un tour à <b class="red">0 Batterie ou moins</b>, ton dôme s'éteint : tu ne joues plus, mais ton Razoonium reste compté (derrière les dômes allumés).</li>
+          <li>Si tu finis un tour à <b class="red">0 Batterie ou moins</b>, ton dôme s'éteint : tu ne joues plus, mais ton Razoonium reste compté au classement.</li>
         </ul>
         <div class="ex warn">
           Si tu engages toutes tes Batteries, le coût de vie te fait passer à −1. Seuls tes gains du tour (Génération,
@@ -49,13 +48,13 @@
         </ul>
         <div class="ex warn">
           Le raffinage se fait <b>en fin de tour, après les attaques</b> : les Batteries misées en Raffinage
-          <b class="red">peuvent être pillées</b> (en dernier, après ta réserve et ta Génération). Seul ce qui reste de la
+          <b class="red">peuvent être pillées</b> (en dernier, après ta Génération et ta réserve). Seul ce qui reste de la
           mise est raffiné (3 Batteries → 1 Razoonium).
         </div>
         <h3>Réserve libre</h3>
         <ul>
           <li>Les Batteries que tu n'engages dans aucune action forment ta <b>réserve libre</b>.</li>
-          <li>Elle paie le coût de vie et c'est <b class="red">la première cible du pillage</b>.</li>
+          <li>Elle paie le coût de vie et elle est <b class="red">pillée juste après ta Génération</b>.</li>
         </ul>
       </div>
 
@@ -63,10 +62,11 @@
         <div class="ptitle">03 · Tour de jeu</div>
         <ul>
           <li>Chaque tour dure un temps fixé à la création de la partie (<b>24h, 12h, 6h ou 1h</b>).</li>
-          <li>Avant l'échéance, répartis tes Batteries <b>en secret</b> entre les 7 actions. Tu peux en combiner plusieurs dans le même tour, sans dépasser ce que tu possèdes.</li>
+          <li>Avant l'échéance, répartis tes Batteries <b>en secret</b> entre les 6 actions. Tu peux en combiner plusieurs dans le même tour, sans dépasser ce que tu possèdes.</li>
           <li>Tes ordres restent modifiables jusqu'à la résolution.</li>
           <li>Avec la <b>résolution anticipée</b>, le tour est résolu dès que tous les dômes allumés ont validé.</li>
           <li>Sans ordre validé, ton dôme ne fait rien : tout reste en réserve.</li>
+          <li>Le <b>journal de bord</b> ne te montre que ce qui te concerne, plus les événements publics (météo, lots révélés, dômes éteints, bilan des Batteries). Batteries et Razoonium de chacun sont publics ; boucliers et ordres des autres restent secrets.</li>
         </ul>
         <div class="actions" style="margin-top:16px">
           <div v-for="a in ACTIONS" :key="a.key" class="acard on" :style="{ '--a': a.color }">
@@ -83,12 +83,13 @@
         <div class="ptitle">04 · Générer</div>
         <ul>
           <li>La mise est consommée et remplacée en fin de tour par <b>⌊mise × multiplicateur⌋</b> (arrondi à l'inférieur).</li>
-          <li>Multiplicateur : <b class="lime">×3</b> par temps Calme, <b class="red">×2</b> en <b>Grisaille</b>, <b class="lime">×4</b> en <b>Abondance</b>.</li>
-          <li>La mise en Génération <b class="red">peut être pillée</b> : le rendement est calculé sur ce qu'il en reste après les attaques.</li>
+          <li>Multiplicateur : <b class="lime">×2</b> par temps Calme, <b class="red">×1,5</b> en <b>Grisaille</b>, <b class="lime">×3</b> en <b>Abondance</b>.</li>
+          <li>Pas de plafond : tu mets ce que tu veux en Génération.</li>
+          <li>Mais la mise en Génération est <b class="red">la première pillée</b> : le rendement est calculé sur ce qu'il en reste après les attaques. Plus tu génères, plus tu es une cible.</li>
         </ul>
         <div class="ex">
-          <b>Exemple</b> : tu mets 6 en Génération. Sans attaque, tu récupères 6 × 3 = <b>18</b> (+12).
-          Si on te pille 2 Batteries dans ta Génération, tu ne récupères que 4 × 3 = <b>12</b>.
+          <b>Exemple</b> : tu mets 10 en Génération. Sans attaque, tu récupères 10 × 2 = <b>20</b> (+10).
+          Si on te pille 4 Batteries dans ta Génération, tu ne récupères que 6 × 2 = <b>12</b>.
         </div>
       </div>
 
@@ -97,10 +98,14 @@
         <ul>
           <li>Chaque Batterie en Défense te donne <b>1 dé de défense</b> pour ce tour.</li>
           <li>Le Bouclier ne dure que <b>le tour où il est posé</b>.</li>
-          <li>Chaque dé de défense perdant fait perdre sa Batterie au profit de l'attaquant ; chaque dé gagnant te rapporte la Batterie de l'attaquant.</li>
-          <li>Les Batteries de Bouclier non prises (dés gagnants ou non utilisés) <b class="lime">te reviennent</b> en fin de tour.</li>
+          <li>Chaque dé de défense perdant donne sa Batterie à l'attaquant ; chaque dé gagnant te rapporte la Batterie de l'attaquant.</li>
+          <li>Les Batteries de Bouclier sont <b class="red">consommées</b> en fin de tour, qu'elles aient servi ou non.</li>
           <li>Les Boucliers ne sont pas pillables.</li>
         </ul>
+        <div class="ex warn">
+          <b>Le dilemme</b> : une Batterie en Défense ne génère rien et disparaît. Tu génères à fond en restant exposé,
+          ou tu génères moins pour te protéger ?
+        </div>
       </div>
 
       <div class="panel">
@@ -111,8 +116,8 @@
           <li>On compare les dés <b>un à un, dans l'ordre</b> (le meilleur contre le meilleur…), autant de fois que le camp qui a le moins de dés.</li>
           <li>Dé d'attaque <b>strictement plus fort</b> : l'attaquant garde sa Batterie et <b class="lime">prend la Batterie de Bouclier</b>.</li>
           <li>Sinon (<b>égalité comprise</b>) : le défenseur <b class="red">prend la Batterie d'attaque</b>.</li>
-          <li>Chaque dé d'attaque <b>en trop</b> te rend sa Batterie et <b>pille 1 Batterie</b> à la cible : d'abord dans sa <b>réserve libre</b> (y compris mises d'enchère remboursées et transferts reçus ce tour), puis dans sa <b>Génération</b>, puis dans son <b>Raffinage</b>.</li>
-          <li>On ne pille que ce qui existe : Boucliers, Razoonium déjà acquis, mises d'enchère gagnantes, attaques et transferts envoyés sont hors d'atteinte.</li>
+          <li>Chaque dé d'attaque <b>en trop</b> te rend sa Batterie et <b>pille 2 Batteries</b> à la cible : d'abord dans sa <b>Génération</b>, puis dans sa <b>réserve libre</b> (y compris transferts reçus ce tour), puis dans son <b>Raffinage</b>.</li>
+          <li>On ne pille que ce qui existe : Boucliers, Razoonium déjà acquis, mises d'enchère, attaques et transferts envoyés sont hors d'atteinte.</li>
         </ol>
         <p style="margin-top:10px">
           <b>Plusieurs attaquants</b> sur la même cible : tous leurs dés d'attaque sont triés ensemble face aux dés de défense.
@@ -120,31 +125,19 @@
           Les dés en trop sont les plus faibles du lot.
         </p>
         <div class="ex">
-          <b>Exemple</b> : tu attaques Nat avec <b>4</b>, Nat défend avec <b>2</b> et a une réserve libre de 3.
+          <b>Exemple</b> : tu attaques Nat avec <b>4</b>, Nat défend avec <b>2</b>, a 3 en Génération et une réserve libre de 3.
           <ul>
             <li>Tes dés : 6 · 4 · 3 · 1. Ceux de Nat : 5 · 4.</li>
             <li>6 contre 5 : tu gagnes et prends 1 Batterie de Bouclier.</li>
             <li>4 contre 4 : égalité, Nat prend 1 de tes Batteries.</li>
-            <li>Tes 2 dés en trop (3 et 1) te reviennent et pillent 2 Batteries dans la réserve de Nat.</li>
-            <li>Tu finis à <b class="lime">+6</b> pour 4 engagées (3 récupérées + 1 Bouclier + 2 pillées). Nat récupère 1 Bouclier et gagne 1 Batterie.</li>
+            <li>Tes 2 dés en trop (3 et 1) te reviennent et pillent 4 Batteries : les 3 de la Génération de Nat, puis 1 dans sa réserve.</li>
+            <li>Tu finis à <b class="lime">+8</b> pour 4 engagées (3 récupérées + 1 Bouclier + 4 pillées). Nat gagne 1 Batterie, perd ses 2 Batteries de Bouclier et ne génère rien.</li>
           </ul>
         </div>
       </div>
 
       <div class="panel">
-        <div class="ptitle">07 · Protéger</div>
-        <ul>
-          <li>Tu peux envoyer des Batteries en <b>Bouclier sur un autre dôme</b> : chacune lui donne 1 dé de défense de plus, pour ce tour.</li>
-          <li>Les dés du dôme attaqué sont comparés <b>en premier</b> (du plus fort au plus faible), puis ceux de ses protecteurs (chacun du plus fort au plus faible).</li>
-          <li>Si un de tes dés perd son duel, l'attaquant <b class="red">te prend</b> la Batterie. S'il gagne, c'est <b class="lime">toi</b> qui empoches la Batterie d'attaque.</li>
-          <li>Les Batteries non prises (dés gagnants ou non utilisés) <b class="lime">te reviennent</b> en fin de tour, même si le dôme protégé n'est pas attaqué.</li>
-          <li>Tu ne peux pas protéger le dôme que tu attaques. Tu peux te défendre et protéger quelqu'un dans le même tour.</li>
-          <li>Plusieurs protecteurs : passe d'abord celui qui a envoyé le plus de Batteries, puis celui qui en possède le moins.</li>
-        </ul>
-      </div>
-
-      <div class="panel">
-        <div class="ptitle">08 · Transférer</div>
+        <div class="ptitle">07 · Transférer</div>
         <ul>
           <li>Tu envoies X Batteries à <b>un seul joueur</b> par tour.</li>
           <li>Il les reçoit <b>pendant le tour, avant les attaques</b>, dans sa réserve libre : elles <b class="red">peuvent être pillées</b> ce tour-ci.</li>
@@ -152,41 +145,43 @@
       </div>
 
       <div class="panel">
-        <div class="ptitle">09 · Enchère quotidienne</div>
+        <div class="ptitle">08 · Enchère quotidienne</div>
         <ul>
-          <li><b>⌊joueurs encore en jeu / 2⌋</b> lots de <b class="teal">Razoonium</b> (2 à 8 chacun), visibles par tous et triés du plus gros au plus petit.</li>
-          <li>Les joueurs sont classés par <b>mise décroissante</b> : le 1ᵉʳ remporte le 1ᵉʳ lot, le 2ᵉ le 2ᵉ lot, etc.</li>
-          <li>Les gagnants <b>paient leur mise</b> et le Razoonium s'ajoute <b>directement à leur score</b> (imprenable).</li>
-          <li>Les perdants sont <b>remboursés</b> dans leur réserve libre, donc pillable ce tour-ci.</li>
+          <li><b>⌊joueurs encore en jeu / 2⌋</b> lots de <b class="teal">Razoonium</b> (0 à 4 chacun). Leur contenu reste <b>caché jusqu'à la résolution</b> ; ils sont triés du plus gros au plus petit.</li>
+          <li><b class="red">Tout le monde paie sa mise</b>, gagnant ou perdant.</li>
+          <li>Les joueurs sont classés par <b>mise décroissante</b> : le 1ᵉʳ remporte le 1ᵉʳ lot, le 2ᵉ le 2ᵉ lot, etc. Le Razoonium s'ajoute <b>directement au score</b> (imprenable).</li>
           <li>Égalité de mise : le joueur qui avait le moins de Batteries en début de tour passe devant.</li>
         </ul>
+        <div class="ex warn">
+          <b>Quitte ou double</b> : 1 Razoonium vaut 3 Batteries au raffinage. Miser 4 pour un lot de 4, c'est l'équivalent
+          de 12 Batteries ; pour un lot de 0, ou si on te passe devant, tu perds tout.
+        </div>
         <div class="ex">
-          <b>Exemple</b> : lots du jour 6 et 3. Tristan mise 4, Nat 2, Basto 2 (Nat a moins de Batteries que Basto).
-          Tristan paie 4 et gagne <b class="teal">6 Razoonium</b>. Nat paie 2 et gagne <b class="teal">3 Razoonium</b>.
-          Basto récupère ses 2 Batteries.
+          <b>Exemple</b> : 2 lots, révélés à la résolution : 3 et 0. Tristan mise 4, Nat 2, Basto 2 (Nat a moins de Batteries que Basto).
+          Tristan paie 4 et gagne <b class="teal">3 Razoonium</b>. Nat paie 2 et ne gagne rien (lot vide).
+          Basto paie 2 et ne gagne rien.
         </div>
       </div>
 
       <div class="panel">
-        <div class="ptitle">10 · Météo (D6)</div>
+        <div class="ptitle">09 · Météo (D6)</div>
         <p style="margin-bottom:12px">Lancée à chaque résolution : personne ne la connaît au moment de donner ses ordres.</p>
         <div class="wtable">
-          <div><span class="d">1</span><b style="color:var(--amber)"><v-icon class="mi" size="1.1em" :icon="WEATHER.gloom.icon" /> Grisaille</b><span>Génération ×2</span></div>
-          <div><span class="d">2-5</span><b style="color:var(--cyan)"><v-icon class="mi" size="1.1em" :icon="WEATHER.calm.icon" /> Calme</b><span>Génération ×3</span></div>
-          <div><span class="d">6</span><b style="color:var(--lime)"><v-icon class="mi" size="1.1em" :icon="WEATHER.abundance.icon" /> Abondance</b><span>Génération ×4</span></div>
+          <div><span class="d">1</span><b style="color:var(--amber)"><v-icon class="mi" size="1.1em" :icon="WEATHER.gloom.icon" /> Grisaille</b><span>Génération ×1,5</span></div>
+          <div><span class="d">2-5</span><b style="color:var(--cyan)"><v-icon class="mi" size="1.1em" :icon="WEATHER.calm.icon" /> Calme</b><span>Génération ×2</span></div>
+          <div><span class="d">6</span><b style="color:var(--lime)"><v-icon class="mi" size="1.1em" :icon="WEATHER.abundance.icon" /> Abondance</b><span>Génération ×3</span></div>
         </div>
       </div>
 
       <div class="panel">
-        <div class="ptitle">11 · Ordre de résolution</div>
+        <div class="ptitle">10 · Ordre de résolution</div>
         <ol>
           <li><b>Coût de vie</b> : −1 Batterie par dôme.</li>
           <li><b>Météo</b> : lancer du dé, qui fixe le multiplicateur de Génération.</li>
-          <li><b>Enchères</b> : lots de Razoonium attribués, mises perdantes remboursées dans la réserve.</li>
+          <li><b>Enchères</b> : toutes les mises sont payées, les lots sont révélés et attribués.</li>
           <li><b>Transferts</b> : arrivée dans la réserve du destinataire.</li>
-          <li><b>Protections</b> : les Boucliers envoyés rejoignent les dômes protégés.</li>
-          <li><b>Attaques</b> : lancers de dés et duels, puis pillage par les dés en trop (réserve, puis Génération, puis Raffinage).</li>
-          <li><b>Boucliers</b> : les Batteries de Bouclier non prises reviennent à leur propriétaire.</li>
+          <li><b>Attaques</b> : lancers de dés et duels, puis pillage par les dés en trop, 2 Batteries chacun (Génération, puis réserve, puis Raffinage).</li>
+          <li><b>Boucliers</b> : les Batteries de Bouclier restantes sont consommées.</li>
           <li><b>Raffinage & Génération</b> sur les mises restantes, plus les Batteries gagnées et le butin.</li>
           <li><b>Bilan</b> : tout dôme à 0 Batterie ou moins s'éteint.</li>
         </ol>

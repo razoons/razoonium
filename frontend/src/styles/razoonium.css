@@ -358,7 +358,14 @@ select option{background:#0a1226}
 .entry ul{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:4px;font-size:15px;color:var(--soft)}
 .entry li::before{content:"▸ ";color:var(--cyan)}
 /* détail d'une attaque, rattaché à la ligne précédente */
-.entry li.sub{padding-left:18px;font-size:14px}
+.entry li.sub{padding-left:18px;font-size:14px;margin:0;letter-spacing:normal;color:inherit}
+.entry .die{color:var(--text);vertical-align:-0.45em}
+/* duel : dé d'attaque face au dé de défense, le perdant estompé */
+.entry .duel{display:inline-flex;align-items:center;gap:2px;margin:3px 6px 3px 0;padding:0 6px;border:1px solid rgba(255,255,255,.12);vertical-align:middle}
+.entry .duel .die{vertical-align:0}
+.entry .duel .lose{opacity:.35}
+.entry .duel .vs{font-family:'Orbitron';font-size:9px;letter-spacing:.1em;color:var(--muted)}
+.entry .duel .slot{display:inline-block;width:1.8em;height:1.8em;margin:0 .2em;border:1px dashed rgba(255,255,255,.2);border-radius:4px}
 .entry li.sub::before{content:"↳ ";color:var(--muted)}
 .entry .bilan{margin-top:10px;display:grid;grid-template-columns:1fr auto;gap:2px 12px;font-size:14px;max-width:420px}
 

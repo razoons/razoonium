@@ -126,7 +126,7 @@
             <div class="stat res" :style="{ '--a': actionColor.def }">
               <div class="k"><v-icon class="mi" size="1.1em" :icon="ICONS.shield" /> Bouclier ce tour</div>
               <div class="v">{{ draft.def }}</div>
-              <div class="s">1 batterie = 1 dé · revient si elle n'est pas prise</div>
+              <div class="s">1 batterie = 1 dé · consommée en fin de tour</div>
             </div>
           </div>
 
@@ -174,10 +174,10 @@
                 </div>
                 <div class="ds">{{ current.desc }}</div>
                 <div v-if="current.key === 'bid'" class="lotchips">
-                  <span v-for="(v, i) in g.lots" :key="i">
-                    <small>LOT {{ i + 1 }}</small> +{{ v }} <v-icon class="mi" size="1.1em" :icon="ICONS.razoonium" />
+                  <span v-for="i in g.lotCount" :key="i">
+                    <small>LOT {{ i }}</small> ? <v-icon class="mi" size="1.1em" :icon="ICONS.razoonium" />
                   </span>
-                  <span v-if="!g.lots.length" class="empty">Aucun lot aujourd'hui</span>
+                  <span v-if="!g.lotCount" class="empty">Aucun lot aujourd'hui</span>
                 </div>
                 <div class="stepper">
                   <button :disabled="!editable || draft[current.key] <= 0" @click="step(current.key, -1, $event)">−</button>
@@ -294,7 +294,7 @@
                 <span><v-icon class="mi" size="1.1em" :icon="WEATHER[e.weather].icon" /> {{ WEATHER[e.weather].label }} · dé {{ e.die }}</span>
               </h4>
               <ul>
-                <li v-for="(l, i) in e.lines" :key="i" :class="{ sub: l.startsWith('↳ ') }">
+                <li v-for="(l, i) in displayLines(e.lines)" :key="i" :class="{ sub: l.startsWith('↳ ') }">
                   <LogLine :line="l.replace(/^↳ /, '')" :players="g.players" />
                 </li>
               </ul>
@@ -321,7 +321,7 @@ import { useRoute, useRouter } from 'vue-router';
 import api from '../api';
 import { auth } from '../stores/auth';
 import { toast } from '../stores/toast';
-import { ACTIONS, WEATHER, ICONS, emptyOrders, spent, timeLeft } from '../game';
+import { ACTIONS, WEATHER, ICONS, emptyOrders, spent, timeLeft, displayLines } from '../game';
 import EvolutionChart from '../components/EvolutionChart.vue';
 import LogLine from '../components/LogLine.vue';
 
@@ -372,14 +372,15 @@ const consoleState = computed(() => {
 const endSummary = computed(() => {
   const win = g.value.players[g.value.ranking[0]];
   if (!alive.value.length) return 'Tous les dômes se sont éteints.';
-  if (alive.value.length === 1 && g.value.day <= g.value.maxDays) return `${win.name} est le dernier dôme debout.`;
-  return `${g.value.maxDays} jours écoulés. ${win.name} l'emporte avec ${win.razoonium || 0} Razoonium.`;
+  const wins = `${win.name} l'emporte avec ${win.razoonium || 0} Razoonium.`;
+  if (alive.value.length === 1 && g.value.day <= g.value.maxDays) return `${alive.value[0].name} est le dernier dôme debout. ${wins}`;
+  return `${g.value.maxDays} jours écoulés. ${wins}`;
 });
 
-// Classement : vivants d'abord, puis Razoonium, batteries, jour d'élimination
+// Classement : Razoonium d'abord (dômes éteints compris) ; à égalité, allumé devant, puis batteries, jour d'élimination
 const standings = computed(() => g.value.ranking ?? g.value.players
   .map((p, id) => ({ p, id }))
-  .sort((a, b) => (b.p.alive - a.p.alive) || (b.p.razoonium || 0) - (a.p.razoonium || 0) || b.p.batteries - a.p.batteries
+  .sort((a, b) => (b.p.razoonium || 0) - (a.p.razoonium || 0) || (b.p.alive - a.p.alive) || b.p.batteries - a.p.batteries
     || (b.p.elimDay || 0) - (a.p.elimDay || 0))
   .map((x) => x.id));
 
@@ -441,8 +442,6 @@ function submit() {
   const o = draft.value;
   if (o.atk > 0 && o.atkTarget == null) return toast('⚠ Attaque sans cible');
   if (o.xfer > 0 && o.xferTarget == null) return toast('⚠ Transfert sans cible');
-  if (o.prot > 0 && o.protTarget == null) return toast('⚠ Protection sans cible');
-  if (o.prot > 0 && o.atk > 0 && o.protTarget === o.atkTarget) return toast('⚠ Tu ne peux pas protéger le dôme que tu attaques');
   dirty.value = false;
   call(() => api.put(`/games/${props.id}/orders`, { orders: o, ready: true }), 'Ordres verrouillés');
 }
@@ -505,7 +504,7 @@ const isOn = (a) => draft.value[a.key] > 0;
 function summary(a) {
   const o = draft.value;
   if (!isOn(a)) return a.tag;
-  if (!a.target) return { gen: `→ +${o.gen * 3}`, def: `${o.def} dé(s)`, bid: `mise ${o.bid}`, ref: `score +${Math.floor(o.ref / 3)}` }[a.key];
+  if (!a.target) return { gen: `→ +${o.gen * 2}`, def: `${o.def} dé(s)`, bid: `mise ${o.bid}`, ref: `score +${Math.floor(o.ref / 3)}` }[a.key];
   const t = o[a.target];
   return t == null ? '⚠ cible ?' : `→ ${g.value.players[t].name}`;
 }
@@ -514,20 +513,16 @@ function preview(key) {
   const o = draft.value;
   const nm = (id) => (id == null ? '' : g.value.players[id].name);
   switch (key) {
-    case 'gen': return o.gen ? `→ +${o.gen * 3} (×3) · +${o.gen * 2} si Grisaille · +${o.gen * 4} si Abondance` : '';
-    case 'def': return o.def ? `→ ${o.def} dé(s) de défense ce tour · les batteries non prises te reviennent` : '';
+    case 'gen': return o.gen ? `→ +${o.gen * 2} (×2) · +${Math.floor(o.gen * 1.5)} si Grisaille · +${o.gen * 3} si Abondance · pillée en premier` : '';
+    case 'def': return o.def ? `→ ${o.def} dé(s) de défense ce tour · batteries consommées, même sans attaque` : '';
     case 'atk':
       if (!o.atk) return '';
       if (o.atkTarget == null) return '⚠ choisis une cible';
-      return `→ ${nm(o.atkTarget)} · ${o.atk} dé(s) d'attaque · les dés en trop pillent`;
-    case 'prot':
-      if (!o.prot) return '';
-      if (o.protTarget == null) return '⚠ choisis une cible';
-      return `→ ${o.prot} dé(s) de défense pour ${nm(o.protTarget)} · les batteries non prises te reviennent`;
+      return `→ ${nm(o.atkTarget)} · ${o.atk} dé(s) d'attaque · chaque dé en trop pille 2`;
     case 'xfer':
       if (!o.xfer) return '';
       return o.xferTarget == null ? '⚠ choisis une cible' : `→ ${o.xfer} pour ${nm(o.xferTarget)}`;
-    case 'bid': return o.bid ? `→ mise de ${o.bid} sur ${g.value.lots.length} lot(s)` : '';
+    case 'bid': return o.bid ? `→ mise de ${o.bid} sur ${g.value.lotCount} lot(s) · payée même si tu perds` : '';
     case 'ref': {
       if (!o.ref) return '';
       const r = Math.floor(o.ref / 3);
