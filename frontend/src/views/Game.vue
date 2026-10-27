@@ -68,6 +68,23 @@
       </div>
     </div>
 
+    <!-- ── Partie des anciennes règles ────────────────────────────── -->
+    <div v-else-if="g.legacy" class="narrow" style="max-width:640px;margin:0 auto">
+      <div class="panel" style="padding:24px">
+        <h1 class="hero-title" style="font-size:24px">{{ g.name }}</h1>
+        <p class="sub">
+          Cette partie a été lancée avec les anciennes règles (Batteries) et ne peut plus être jouée.
+          Crée une nouvelle partie pour découvrir le troc.
+        </p>
+        <div style="display:flex;gap:10px;flex-wrap:wrap">
+          <router-link to="/" class="btn ghost" style="flex:1">Retour</router-link>
+          <button v-if="isHost" class="btn danger" style="flex:1" :disabled="busy" @click="removeGame">
+            <v-icon size="18">mdi-delete-outline</v-icon> Supprimer
+          </button>
+        </div>
+      </div>
+    </div>
+
     <!-- ── Partie ─────────────────────────────────────────────────── -->
     <template v-else>
       <div class="gamebar">
@@ -103,7 +120,7 @@
         </nav>
       </Teleport>
 
-      <main v-if="tab === 'ordres'" class="board">
+      <main v-if="tab === 'ordres'" class="board stack">
         <!-- Console -->
         <section class="panel">
           <div class="chead" :style="{ '--c': me.color }">
@@ -112,31 +129,12 @@
               <template v-else>{{ (me.name[0] || '?').toUpperCase() }}</template>
             </div>
             <div class="who">
-              <div class="lbl">COMMANDANT</div>
+              <div class="lbl">{{ myRes.role.toUpperCase() }} · PRODUIT {{ myRes.name.toUpperCase() }}</div>
               <h2>{{ me.name }}</h2>
             </div>
-            <div class="score" title="Score · imprenable">
+            <div class="score" title="Score">
               <div class="k"><v-icon class="mi" size="1.1em" :icon="ICONS.razoonium" /> Razoonium</div>
-              <div class="v teal">{{ me.razoonium || 0 }}</div>
-            </div>
-          </div>
-
-          <div class="zone-title">Ressources</div>
-          <div class="stats">
-            <div class="stat res" :style="{ '--a': actionColor.gen }">
-              <div class="k"><v-icon class="mi" size="1.1em" :icon="ICONS.battery" /> Batteries</div>
-              <div class="v">{{ me.batteries }}</div>
-              <div class="cells">
-                <i
-                  v-for="i in Math.max(me.batteries, 1)" :key="i"
-                  :class="i <= remaining ? 'on' : i <= me.batteries ? 'lock' : ''"
-                />
-              </div>
-            </div>
-            <div class="stat res" :style="{ '--a': actionColor.def }">
-              <div class="k"><v-icon class="mi" size="1.1em" :icon="ICONS.shield" /> Bouclier ce tour</div>
-              <div class="v">{{ draft.def }}</div>
-              <div class="s">1 batterie = 1 dé · consommée en fin de tour</div>
+              <div class="v teal">{{ me.razoonium }}</div>
             </div>
           </div>
 
@@ -145,84 +143,135 @@
             <h2 class="hero-title" style="font-size:22px;margin-top:24px">FIN DE PARTIE</h2>
             <p class="sub" style="margin-bottom:0">{{ endSummary }}</p>
             <div class="rank">
-              <div v-for="(id, i) in g.ranking" :key="id" :class="{ dead: !g.players[id].alive }">
+              <div v-for="(id, i) in g.ranking" :key="id">
                 <span class="pos">#{{ i + 1 }}</span>
                 <span :style="{ color: g.players[id].color, fontWeight: 700 }"><v-icon v-if="g.players[id].icon" class="mi" size="1em" :icon="g.players[id].icon" /> {{ g.players[id].name }}</span>
-                <span class="num teal"><v-icon class="mi" size="1.1em" :icon="ICONS.razoonium" /> {{ g.players[id].razoonium || 0 }}</span>
-                <template v-if="g.players[id].alive">
-                  <span class="num" :style="{ color: actionColor.gen }"><v-icon class="mi" size="1.1em" :icon="ICONS.battery" /> {{ g.players[id].batteries }}</span>
-                </template>
-                <span v-else class="out"><v-icon class="mi" size="1.1em" :icon="ICONS.dead" /> jour {{ g.players[id].elimDay }}</span>
+                <span class="num teal"><v-icon class="mi" size="1.1em" :icon="ICONS.razoonium" /> {{ g.players[id].razoonium }}</span>
+                <span class="num"><v-icon class="mi" size="1.1em" :icon="ICONS.stock" /> {{ total(g.players[id].inv) }}</span>
               </div>
             </div>
           </template>
 
-          <div v-else-if="!me.alive" class="locked-msg">DÔME ÉTEINT — JOUR {{ me.elimDay }}</div>
-
-          <!-- Ordres -->
           <template v-else>
-            <div class="zone-title orders">Ordres du tour</div>
-            <div class="tiles">
-              <button
-                v-for="a in ACTIONS" :key="a.key"
-                :class="['tile', { on: isOn(a) }]" :style="{ '--a': a.color }"
-                @click="openKey = a.key"
-              >
-                <span class="ic"><v-icon :icon="a.icon" /></span>
-                <span class="nm">{{ a.name }}</span>
-                <span class="sm">{{ summary(a) }}</span>
-                <span v-if="draft[a.key] > 0" class="badge">{{ draft[a.key] }}</span>
-              </button>
+            <!-- Recette -->
+            <div class="zone-title">Recette du jour</div>
+            <div class="recipe">
+              <template v-for="(q, k) in g.recipe" :key="k">
+                <div v-if="q" :class="['ing', { ok: me.inv[k] >= q }]" :style="{ '--c': R[k].color }">
+                  <v-icon :icon="R[k].icon" size="22" />
+                  <span class="q">{{ q }}</span>
+                  <span class="nm">{{ R[k].name }}</span>
+                  <span class="have">{{ me.inv[k] }}/{{ q }}</span>
+                </div>
+              </template>
+              <span class="eq">=</span>
+              <div class="ing ok" style="--c:#2bffc6">
+                <v-icon :icon="ICONS.razoonium" size="22" /><span class="q">1</span><span class="nm">Razoonium</span>
+              </div>
             </div>
+            <p class="muted hintline">
+              <template v-if="canRefine">Ton stock actuel réunit la recette <b class="teal">{{ canRefine }} fois</b>.</template>
+              <template v-else>Il te manque des ingrédients : troque-les, pille-les ou tente la loterie.</template>
+            </p>
 
-            <v-dialog v-model="actionOpen" max-width="440">
-              <div v-if="current" class="acard on modal" :style="{ '--a': current.color }">
+            <!-- Inventaire -->
+            <div class="zone-title">
+              Inventaire
+              <span :class="['tag', { over: total(me.inv) > g.rules.invLimit }]">{{ total(me.inv) }} / {{ g.rules.invLimit }}</span>
+            </div>
+            <div class="inv">
+              <div v-for="(r, k) in R" :key="k" :class="['rcell', { own: k === me.role, zero: !me.inv[k] }]" :style="{ '--c': r.color }">
+                <v-icon :icon="r.icon" size="20" />
+                <span class="nm">{{ r.name }}</span>
+                <span class="v">{{ me.inv[k] }}</span>
+                <span v-if="draft.pay[k]" class="s red">−{{ draft.pay[k] }} au Marché Noir</span>
+                <span v-else-if="k === me.role" class="s">ta production · +{{ g.rules.production }}/tour</span>
+              </div>
+            </div>
+            <p v-if="total(me.inv) > g.rules.invLimit" class="muted hintline">
+              Au-delà de {{ g.rules.invLimit }}, le surplus (ressource la plus abondante d'abord) part au Marché Noir en fin de tour.
+            </p>
+
+            <!-- Ordres secrets -->
+            <div class="zone-title orders">Ordres secrets · résolus à l'échéance</div>
+            <div class="actions">
+              <div class="acard" :class="{ on: draft.refine }" style="--a:#2bffc6">
                 <div class="hd">
-                  <div class="ic"><v-icon :icon="current.icon" /></div>
-                  <div style="flex:1"><div class="nm">{{ current.name }}</div><div class="tg">{{ current.tag }}</div></div>
-                  <button class="btn ghost icon" title="Fermer" @click="openKey = null"><v-icon size="18">mdi-close</v-icon></button>
+                  <div class="ic"><v-icon :icon="ICONS.refine" /></div>
+                  <div><div class="nm">Raffiner</div><div class="tg">Score</div></div>
                 </div>
-                <div class="ds">{{ current.desc }}</div>
-                <div v-if="current.key === 'bid'" class="lotchips">
-                  <span v-for="i in g.lotCount" :key="i">
-                    <small>LOT {{ i }}</small> ? <v-icon class="mi" size="1.1em" :icon="ICONS.razoonium" />
-                  </span>
-                  <span v-if="!g.lotCount" class="empty">Aucun lot aujourd'hui</span>
-                </div>
+                <div class="ds">Recette du jour → 1 Razoonium, autant de fois que demandé et possible, après le Marché Noir.</div>
                 <div class="stepper">
-                  <button :disabled="!editable || draft[current.key] <= 0" @click="step(current.key, -1, $event)">−</button>
-                  <div class="val">{{ draft[current.key] }}</div>
-                  <button :disabled="!editable || remaining <= 0" @click="step(current.key, 1, $event)">+</button>
+                  <button :disabled="!editable || draft.refine <= 0" @click="setRefine(draft.refine - 1)">−</button>
+                  <div class="val">{{ draft.refine }}</div>
+                  <button :disabled="!editable" @click="setRefine(draft.refine + 1)">+</button>
                 </div>
-                <div v-if="current.target" class="targets">
-                  <button
-                    v-for="o in others" :key="o.id"
-                    :class="['target', { on: draft[current.target] === o.id }]" :style="{ '--c': o.p.color }"
-                    :disabled="!editable" @click="pickTarget(current, o.id)"
-                  >
+                <div class="pv">
+                  <button v-if="editable && canRefine && draft.refine !== canRefine" class="btn ghost sm" @click="setRefine(canRefine)">Max ({{ canRefine }})</button>
+                  <template v-if="draft.refine > canRefine"> {{ draft.refine - canRefine }} de plus que ton stock actuel : il faudra les obtenir d'ici là.</template>
+                </div>
+              </div>
+
+              <div class="acard" :class="{ on: total(draft.raids) }" style="--a:var(--red)">
+                <div class="hd">
+                  <div class="ic"><v-icon :icon="ICONS.raid" /></div>
+                  <div><div class="nm">Pillage</div><div class="tg">Marché Noir · {{ g.rules.raidCost }} → 1 volée</div></div>
+                </div>
+                <div class="ds">Paie {{ g.rules.raidCost }} ressources de ton choix pour voler 1 ressource au hasard dans le stock de la cible.</div>
+                <div class="raids">
+                  <div v-for="o in others" :key="o.id" class="raidrow" :style="{ '--c': o.p.color }">
                     <span class="tn"><v-icon v-if="o.p.icon" class="mi" size="1em" :icon="o.p.icon" /> {{ o.p.name }}</span>
-                    <span class="ts">
-                      <v-icon class="mi" size="1em" :icon="ICONS.battery" /> {{ o.p.batteries }}
-                    </span>
-                  </button>
-                </div>
-                <div class="pv">{{ preview(current.key) }}</div>
-                <div class="mfoot">
-                  <span class="muted">Disponibles : <b class="lime">{{ remaining }}</b> <v-icon class="mi" size="1.1em" :icon="ICONS.battery" /></span>
-                  <span v-if="!editable" class="muted">Ordres verrouillés</span>
-                  <div style="display:flex;gap:8px;margin-left:auto">
-                    <button
-                      v-if="editable && current.target && draft[current.target] != null"
-                      class="btn ghost" @click="abandon(current)"
-                    ><v-icon size="16">mdi-close-circle-outline</v-icon> Abandonner</button>
-                    <button class="btn primary" @click="openKey = null">OK</button>
+                    <div class="stepper mini">
+                      <button :disabled="!editable || !draft.raids[o.id]" @click="setRaid(o.id, -1)">−</button>
+                      <div class="val">{{ draft.raids[o.id] }}</div>
+                      <button :disabled="!editable" @click="setRaid(o.id, 1)">+</button>
+                    </div>
                   </div>
                 </div>
               </div>
-            </v-dialog>
+
+              <div class="acard" :class="{ on: draft.lotto }" style="--a:var(--magenta)">
+                <div class="hd">
+                  <div class="ic"><v-icon :icon="ICONS.lotto" /></div>
+                  <div><div class="nm">Loterie</div><div class="tg">Marché Noir · {{ g.rules.lottoCost }} → 1 au hasard</div></div>
+                </div>
+                <div class="ds">Paie {{ g.rules.lottoCost }} ressources pour piocher 1 ressource au hasard dans la réserve du Marché Noir. Ta mise y entre avant le tirage.</div>
+                <div class="stepper">
+                  <button :disabled="!editable || draft.lotto <= 0" @click="setLotto(-1)">−</button>
+                  <div class="val">{{ draft.lotto }}</div>
+                  <button :disabled="!editable" @click="setLotto(1)">+</button>
+                </div>
+                <div class="pv">
+                  Réserve :
+                  <template v-for="(q, k) in g.market" :key="k">
+                    <span v-if="q" class="mchip"><v-icon :icon="R[k].icon" size="14" :style="{ color: R[k].color }" />{{ q }}</span>
+                  </template>
+                </div>
+              </div>
+            </div>
+
+            <div v-if="cost" class="paybox">
+              <div class="phead">
+                <span>Paiement du Marché Noir :
+                  <b :class="total(draft.pay) === cost ? 'lime' : 'red'">{{ total(draft.pay) }} / {{ cost }}</b>
+                </span>
+                <button v-if="editable" class="btn ghost sm" @click="autoPay(); dirty = true">Auto</button>
+              </div>
+              <div class="inv">
+                <div v-for="(r, k) in R" :key="k" class="rcell pay" :style="{ '--c': r.color }">
+                  <v-icon :icon="r.icon" size="18" />
+                  <span class="nm">{{ r.name }} <small class="muted">({{ me.inv[k] }})</small></span>
+                  <div class="stepper mini" style="--a:var(--c)">
+                    <button :disabled="!editable || !draft.pay[k]" @click="setPay(k, -1)">−</button>
+                    <div class="val">{{ draft.pay[k] }}</div>
+                    <button :disabled="!editable || draft.pay[k] >= me.inv[k]" @click="setPay(k, 1)">+</button>
+                  </div>
+                </div>
+              </div>
+            </div>
 
             <div class="cfoot sticky">
-              <span class="hint">Shift + clic : ±5 · ordres modifiables jusqu'à la résolution</span>
+              <span class="hint">Ordres modifiables jusqu'à la résolution</span>
               <div style="display:flex;gap:10px;flex-wrap:wrap">
                 <template v-if="g.myReady && !dirty">
                   <button class="btn ghost" :disabled="busy" @click="unready">Modifier les ordres</button>
@@ -234,7 +283,75 @@
               </div>
             </div>
           </template>
+        </section>
 
+        <!-- Troc -->
+        <section v-if="g.status === 'running'" class="panel">
+          <div class="ptitle"><v-icon class="mi" size="1.1em" :icon="ICONS.gift" /> Troc · dons immédiats</div>
+          <p class="muted hintline" style="margin-top:0">
+            Négocie sur le chat, puis envoie. Le don arrive tout de suite et <b>rien ne garantit la contrepartie</b>.
+            Ce que tu as engagé au Marché Noir ne peut pas être donné.
+          </p>
+          <div class="targets">
+            <button
+              v-for="o in others" :key="o.id"
+              :class="['target', { on: giftTo === o.id }]" :style="{ '--c': o.p.color, '--a': o.p.color }"
+              @click="giftTo = o.id"
+            >
+              <span class="tn"><v-icon v-if="o.p.icon" class="mi" size="1em" :icon="o.p.icon" /> {{ o.p.name }}</span>
+              <span class="ts"><v-icon class="mi" size="1em" :icon="R[o.p.role].icon" :style="{ color: R[o.p.role].color }" /> {{ R[o.p.role].role }}</span>
+            </button>
+          </div>
+          <div class="inv" style="margin-top:12px">
+            <div v-for="(r, k) in R" :key="k" class="rcell pay" :style="{ '--c': r.color }">
+              <v-icon :icon="r.icon" size="18" />
+              <span class="nm">{{ r.name }} <small class="muted">({{ giftable[k] }})</small></span>
+              <div class="stepper mini" style="--a:var(--c)">
+                <button :disabled="!giftVec[k]" @click="giftVec[k]--">−</button>
+                <div class="val">{{ giftVec[k] }}</div>
+                <button :disabled="giftVec[k] >= giftable[k]" @click="giftVec[k]++">+</button>
+              </div>
+            </div>
+          </div>
+          <div class="cfoot">
+            <span class="hint">{{ giftTo == null ? 'Choisis un destinataire' : `Pour ${g.players[giftTo].name}` }}</span>
+            <button class="btn primary" :disabled="busy || giftTo == null || !total(giftVec)" @click="sendGift">
+              <v-icon size="16" :icon="ICONS.gift" /> Envoyer
+            </button>
+          </div>
+          <ul v-if="g.feed.length" class="feed">
+            <li v-for="(f, i) in g.feed" :key="i">
+              <LogLine :line="feedLine(f)" :players="g.players" :resources="R" />
+            </li>
+          </ul>
+        </section>
+
+        <!-- Dômes -->
+        <section class="panel">
+          <div class="ptitle">Dômes <span class="tag">stocks publics</span></div>
+          <div class="domes">
+            <div v-for="o in allPlayers" :key="o.id" class="dome" :style="{ '--c': o.p.color }">
+              <span class="tn">
+                <v-icon v-if="o.p.icon" class="mi" size="1em" :icon="o.p.icon" /> {{ o.p.name }}<span v-if="o.id === g.me" class="muted"> (toi)</span>
+                <small><v-icon class="mi" size="1em" :icon="R[o.p.role].icon" :style="{ color: R[o.p.role].color }" /> {{ R[o.p.role].role }}</small>
+              </span>
+              <span class="stock">
+                <template v-for="(q, k) in o.p.inv" :key="k">
+                  <span v-if="q" class="mchip"><v-icon :icon="R[k].icon" size="14" :style="{ color: R[k].color }" />{{ q }}</span>
+                </template>
+              </span>
+              <span class="num teal"><v-icon class="mi" size="1.1em" :icon="ICONS.razoonium" /> {{ o.p.razoonium }}</span>
+            </div>
+            <div class="dome" style="--c:var(--magenta)">
+              <span class="tn"><v-icon class="mi" size="1em" :icon="ICONS.market" /> Marché Noir <small>réserve</small></span>
+              <span class="stock">
+                <template v-for="(q, k) in g.market" :key="k">
+                  <span v-if="q" class="mchip"><v-icon :icon="R[k].icon" size="14" :style="{ color: R[k].color }" />{{ q }}</span>
+                </template>
+              </span>
+              <span />
+            </div>
+          </div>
         </section>
       </main>
 
@@ -243,34 +360,31 @@
         <section class="panel">
           <div class="ptitle">
             Classement {{ g.status === 'over' ? 'final' : 'provisoire' }}
-            <span v-if="g.status === 'running'" class="tag">Ordres validés {{ readyCount }}/{{ alive.length }}</span>
+            <span v-if="g.status === 'running'" class="tag">Ordres validés {{ readyCount }}/{{ g.players.length }}</span>
           </div>
           <div class="rank" style="margin:0">
-            <div v-for="(id, i) in standings" :key="id" :class="{ dead: !g.players[id].alive }">
+            <div v-for="(id, i) in standings" :key="id">
               <span class="pos">#{{ i + 1 }}</span>
               <span class="who-cell">
                 <span :style="{ color: g.players[id].color, fontWeight: 700 }">
                   <v-icon v-if="g.players[id].icon" class="mi" size="1em" :icon="g.players[id].icon" /> {{ g.players[id].name }}<span v-if="id === g.me" class="muted"> (toi)</span>
                 </span>
                 <span
-                  v-if="g.status === 'running' && g.players[id].alive"
+                  v-if="g.status === 'running'"
                   :class="['status', g.ready[id] ? 'ready' : 'wait']"
                   :title="g.ready[id] ? 'Ordres validés pour ce tour' : 'Ordres pas encore validés'"
                 >{{ g.ready[id] ? '✔ PRÊT' : '… EN ATTENTE' }}</span>
               </span>
-              <span class="num teal"><v-icon class="mi" size="1.1em" :icon="ICONS.razoonium" /> {{ g.players[id].razoonium || 0 }}</span>
-              <template v-if="g.players[id].alive">
-                <span class="num" :style="{ color: actionColor.gen }"><v-icon class="mi" size="1.1em" :icon="ICONS.battery" /> {{ g.players[id].batteries }}</span>
-              </template>
-              <span v-else class="out"><v-icon class="mi" size="1.1em" :icon="ICONS.dead" /> jour {{ g.players[id].elimDay }}</span>
+              <span class="num teal"><v-icon class="mi" size="1.1em" :icon="ICONS.razoonium" /> {{ g.players[id].razoonium }}</span>
+              <span class="num"><v-icon class="mi" size="1.1em" :icon="ICONS.stock" /> {{ total(g.players[id].inv) }}</span>
             </div>
           </div>
         </section>
         <section class="panel">
           <div class="ptitle">Évolution</div>
           <div class="tabs">
-            <button :class="{ on: chartTab === 'r' }" :style="{ '--a': actionColor.ref }" @click="chartTab = 'r'"><v-icon class="mi" size="1.1em" :icon="ICONS.razoonium" /> Razoonium</button>
-            <button :class="{ on: chartTab === 'b' }" :style="{ '--a': actionColor.gen }" @click="chartTab = 'b'"><v-icon class="mi" size="1.1em" :icon="ICONS.battery" /> Batteries</button>
+            <button :class="{ on: chartTab === 'r' }" style="--a:#2bffc6" @click="chartTab = 'r'"><v-icon class="mi" size="1.1em" :icon="ICONS.razoonium" /> Razoonium</button>
+            <button :class="{ on: chartTab === 't' }" style="--a:var(--lime)" @click="chartTab = 't'"><v-icon class="mi" size="1.1em" :icon="ICONS.stock" /> Stock</button>
           </div>
           <EvolutionChart
             :key="chartTab" :players="g.players" :history="g.history"
@@ -298,21 +412,22 @@
         <section class="panel">
           <div class="ptitle">Journal de bord <span class="tag">{{ g.log.length }} tour(s)</span></div>
           <div class="log">
-            <div v-for="e in g.log" :key="e.day" class="entry" :style="{ borderColor: WEATHER[e.weather].color }">
+            <div v-for="e in g.log" :key="e.day" class="entry">
               <h4>
                 JOUR {{ String(e.day).padStart(2, '0') }}
-                <span><v-icon class="mi" size="1.1em" :icon="WEATHER[e.weather].icon" /> {{ WEATHER[e.weather].label }} · dé {{ e.die }}</span>
+                <span><LogLine :line="vecLine(e.recipe)" :players="g.players" :resources="R" /></span>
               </h4>
               <ul>
-                <li v-for="(l, i) in displayLines(e.lines)" :key="i" :class="{ sub: l.startsWith('↳ ') }">
-                  <LogLine :line="l.replace(/^↳ /, '')" :players="g.players" />
+                <li v-for="(l, i) in e.lines" :key="i">
+                  <LogLine :line="l" :players="g.players" :resources="R" />
                 </li>
               </ul>
               <div class="bilan">
                 <template v-for="b in e.bilan" :key="b.id">
                   <span :style="{ color: g.players[b.id].color }">{{ g.players[b.id].name }}</span>
-                  <span :class="b.after > b.before ? 'up' : b.after < b.before ? 'down' : ''">
-                    {{ b.before }} → {{ b.after }} ({{ b.after >= b.before ? '+' : '' }}{{ b.after - b.before }})
+                  <span>
+                    <b v-if="b.r" class="up">+{{ b.r }} <v-icon class="mi" size="1em" :icon="ICONS.razoonium" /></b>
+                    <span class="muted"> stock {{ b.before }} → {{ b.after }}</span>
                   </span>
                 </template>
               </div>
@@ -331,13 +446,13 @@ import { useRoute, useRouter } from 'vue-router';
 import api from '../api';
 import { auth } from '../stores/auth';
 import { toast } from '../stores/toast';
-import { ACTIONS, WEATHER, ICONS, emptyOrders, spent, timeLeft, displayLines } from '../game';
+import { ICONS, emptyOrders, total, refinable, timeLeft } from '../game';
 import EvolutionChart from '../components/EvolutionChart.vue';
 import LogLine from '../components/LogLine.vue';
 
 const POLL_MS = 15000;
 const TABS = [
-  { key: 'ordres', label: 'Ordres', icon: 'mdi-console-line' },
+  { key: 'ordres', label: 'Console', icon: 'mdi-console-line' },
   { key: 'score', label: 'Score', icon: 'mdi-chart-line' },
   { key: 'journal', label: 'Journal de bord', icon: 'mdi-script-text-outline' },
 ];
@@ -349,63 +464,59 @@ const tab = computed(() => (TABS.some((t) => t.key === route.query.tab) ? route.
 const setTab = (key) => router.replace({ query: key === 'ordres' ? {} : { tab: key } });
 
 const g = ref(null);
-const draft = ref(emptyOrders());
+const draft = ref(emptyOrders(0));
 const dirty = ref(false);
 const busy = ref(false);
 const chartTab = ref('r');
-const openKey = ref(null);
-const current = computed(() => ACTIONS.find((a) => a.key === openKey.value));
-const actionOpen = computed({
-  get: () => openKey.value !== null,
-  set: (v) => { if (!v) openKey.value = null; },
-});
 const now = ref(Date.now());
 
 const isHost = computed(() => g.value?.hostId === auth.user?.id);
 const me = computed(() => g.value.players[g.value.me]);
+const R = computed(() => g.value.resources);
+const myRes = computed(() => R.value[me.value.role]);
 // Couleurs et emblèmes encore libres (les miens inclus)
 const takenBy = (key) => g.value.players.filter((_, i) => i !== g.value.me).map((p) => p[key]);
 const freeColors = computed(() => (g.value.palette || []).filter((c) => !takenBy('color').includes(c)));
 const freeEmblems = computed(() => (g.value.emblems || []).filter((e) => !takenBy('icon').includes(e)));
-const alive = computed(() => g.value.players.filter((p) => p.alive));
-const readyCount = computed(() => g.value.players.filter((p, i) => p.alive && g.value.ready[i]).length);
-const used = computed(() => spent(draft.value));
-const remaining = computed(() => me.value.batteries - used.value);
-const editable = computed(() => g.value.status === 'running' && me.value.alive && (!g.value.myReady || dirty.value));
-const others = computed(() => g.value.players.map((p, id) => ({ p, id })).filter((o) => o.p.alive && o.id !== g.value.me));
+const allPlayers = computed(() => g.value.players.map((p, id) => ({ p, id })));
+const others = computed(() => allPlayers.value.filter((o) => o.id !== g.value.me));
+const readyCount = computed(() => g.value.ready.filter(Boolean).length);
+const editable = computed(() => g.value.status === 'running' && (!g.value.myReady || dirty.value));
 const dayShown = computed(() => Math.min(g.value.day, g.value.maxDays));
-const consoleState = computed(() => {
-  if (g.value.status === 'over') return 'PARTIE TERMINÉE';
-  if (!me.value.alive) return 'HORS LIGNE';
-  return g.value.myReady && !dirty.value ? 'ORDRES VERROUILLÉS' : 'TERMINAL ACTIF';
-});
+const canRefine = computed(() => refinable(me.value.inv, g.value.recipe));
+const cost = computed(() => g.value.rules.raidCost * total(draft.value.raids) + g.value.rules.lottoCost * draft.value.lotto);
 const endSummary = computed(() => {
   const win = g.value.players[g.value.ranking[0]];
-  if (!alive.value.length) return 'Tous les dômes se sont éteints.';
-  const wins = `${win.name} l'emporte avec ${win.razoonium || 0} Razoonium.`;
-  if (alive.value.length === 1 && g.value.day <= g.value.maxDays) return `${alive.value[0].name} est le dernier dôme debout. ${wins}`;
-  return `${g.value.maxDays} jours écoulés. ${wins}`;
+  return `${g.value.maxDays} jours écoulés. ${win.name} l'emporte avec ${win.razoonium} Razoonium.`;
 });
 
-// Classement : Razoonium d'abord (dômes éteints compris) ; à égalité, allumé devant, puis batteries, jour d'élimination
-const standings = computed(() => g.value.ranking ?? g.value.players
-  .map((p, id) => ({ p, id }))
-  .sort((a, b) => (b.p.razoonium || 0) - (a.p.razoonium || 0) || (b.p.alive - a.p.alive) || b.p.batteries - a.p.batteries
-    || (b.p.elimDay || 0) - (a.p.elimDay || 0))
+// Classement : Razoonium d'abord, puis stock
+const standings = computed(() => g.value.ranking ?? allPlayers.value
+  .slice()
+  .sort((a, b) => b.p.razoonium - a.p.razoonium || total(b.p.inv) - total(a.p.inv))
   .map((x) => x.id));
 
-// Couleurs des actions, réutilisées pour les ressources (batteries = Générer, bouclier = Défendre)
-const actionColor = Object.fromEntries(ACTIONS.map((a) => [a.key, a.color]));
+/* « 2 {r:0} + 1 {r:3} » pour LogLine */
+const vecLine = (v) => (v || []).map((q, k) => (q ? `${q} {r:${k}}` : null)).filter(Boolean).join(' + ') || 'rien';
+const feedLine = (f) => (f.from === g.value.me
+  ? `Tu donnes ${vecLine(f.vec)} à {p:${f.to}}.`
+  : `{p:${f.from}} te donne ${vecLine(f.vec)}.`);
+
+function fromServer(o, n) {
+  const e = emptyOrders(n);
+  return { pay: e.pay.map((_, k) => o?.pay?.[k] ?? 0), raids: e.raids.map((_, k) => o?.raids?.[k] ?? 0), lotto: o?.lotto ?? 0, refine: o?.refine ?? 0 };
+}
 
 function apply(data) {
   const prev = g.value;
   g.value = data;
   if (prev && prev.day !== data.day && data.status !== 'lobby') {
-    const w = data.lastWeather && WEATHER[data.lastWeather.weather];
-    toast(`Jour ${prev.day} résolu${w ? ` — ${w.label}` : ''}`);
+    toast(data.status === 'over' ? 'Partie terminée' : `Jour ${prev.day} résolu — nouvelle recette`);
     dirty.value = false;
+    giftVec.value = Array(data.players.length).fill(0);
   }
-  if (!dirty.value) draft.value = { ...emptyOrders(), ...data.myOrders };
+  if (!dirty.value) draft.value = fromServer(data.myOrders, data.players.length);
+  if (giftVec.value.length !== data.players.length) giftVec.value = Array(data.players.length).fill(0);
 }
 
 async function load() {
@@ -448,35 +559,89 @@ async function call(request, success) {
     const { data } = await request();
     if (data) apply(data);
     if (success) toast(success);
+    return true;
   } catch (e) {
     toast(e.message);
+    return false;
   } finally {
     busy.value = false;
   }
 }
 
-function step(key, dir, e) {
-  const d = dir * (e.shiftKey ? 5 : 1);
-  draft.value[key] = Math.max(0, draft.value[key] + Math.min(d, remaining.value));
+// ── Ordres secrets ──
+
+function setRefine(v) {
+  draft.value.refine = Math.max(0, v);
   dirty.value = true;
+}
+
+function setRaid(id, d) {
+  draft.value.raids[id] = Math.max(0, draft.value.raids[id] + d);
+  autoPay();
+  dirty.value = true;
+}
+
+function setLotto(d) {
+  draft.value.lotto = Math.max(0, draft.value.lotto + d);
+  autoPay();
+  dirty.value = true;
+}
+
+function setPay(k, d) {
+  draft.value.pay[k] = Math.max(0, Math.min(me.value.inv[k], draft.value.pay[k] + d));
+  dirty.value = true;
+}
+
+/* Paiement proposé : d'abord ce qui ne sert pas aux raffinages demandés, le plus abondant en premier */
+function autoPay() {
+  const inv = me.value.inv;
+  const keep = g.value.recipe.map((q) => q * draft.value.refine);
+  const pay = inv.map(() => 0);
+  for (let i = 0; i < cost.value; i++) {
+    let best = -1;
+    let score = -Infinity;
+    inv.forEach((q, k) => {
+      const s = q - keep[k] - pay[k];
+      if (pay[k] < q && s > score) { score = s; best = k; }
+    });
+    if (best < 0) break;
+    pay[best]++;
+  }
+  draft.value.pay = pay;
 }
 
 function reset() {
-  draft.value = emptyOrders();
+  draft.value = emptyOrders(g.value.players.length);
   dirty.value = true;
 }
 
-function submit() {
-  const o = draft.value;
-  if (o.atk > 0 && o.atkTarget == null) return toast('⚠ Attaque sans cible');
-  if (o.xfer > 0 && o.xferTarget == null) return toast('⚠ Transfert sans cible');
+async function submit() {
+  if (total(draft.value.pay) !== cost.value) return toast(`⚠ Paiement : ${total(draft.value.pay)} / ${cost.value}`);
   dirty.value = false;
-  call(() => api.put(`/games/${props.id}/orders`, { orders: o, ready: true }), 'Ordres verrouillés');
+  if (!await call(() => api.put(`/games/${props.id}/orders`, { orders: draft.value, ready: true }), 'Ordres verrouillés')) dirty.value = true;
 }
 
 function unready() {
   call(() => api.put(`/games/${props.id}/orders`, { orders: draft.value, ready: false }));
 }
+
+// ── Troc ──
+
+const giftTo = ref(null);
+const giftVec = ref([]);
+// Ce qui peut être donné : stock moins le paiement déjà validé au Marché Noir
+const giftable = computed(() => me.value.inv.map((q, k) => Math.max(0, q - (g.value.myOrders.pay?.[k] ?? 0))));
+
+async function sendGift() {
+  const to = g.value.players[giftTo.value];
+  const what = giftVec.value.map((q, k) => (q ? `${q} ${R.value[k].name}` : null)).filter(Boolean).join(' + ');
+  if (!confirm(`Donner ${what} à ${to.name} ? C'est immédiat et irréversible.`)) return;
+  if (await call(() => api.post(`/games/${props.id}/gift`, { to: giftTo.value, vec: giftVec.value }), `Envoyé à ${to.name}`)) {
+    giftVec.value = giftVec.value.map(() => 0);
+  }
+}
+
+// ── Partie ──
 
 function start() {
   call(() => api.post(`/games/${props.id}/start`), 'La partie commence !');
@@ -514,53 +679,6 @@ async function share() {
   } catch { /* partage annulé */ }
 }
 
-function pickTarget(a, id) {
-  draft.value[a.target] = id;
-  dirty.value = true;
-}
-
-// Annule l'action ciblée : cible et mise
-function abandon(a) {
-  draft.value[a.target] = null;
-  draft.value[a.key] = 0;
-  dirty.value = true;
-}
-
-const isOn = (a) => draft.value[a.key] > 0;
-
-/* Résumé court affiché sous l'icône */
-function summary(a) {
-  const o = draft.value;
-  if (!isOn(a)) return a.tag;
-  if (!a.target) return { gen: `→ +${o.gen * 2}`, def: `${o.def} dé(s)`, bid: `mise ${o.bid}`, ref: `score +${Math.floor(o.ref / 3)}` }[a.key];
-  const t = o[a.target];
-  return t == null ? '⚠ cible ?' : `→ ${g.value.players[t].name}`;
-}
-
-function preview(key) {
-  const o = draft.value;
-  const nm = (id) => (id == null ? '' : g.value.players[id].name);
-  switch (key) {
-    case 'gen': return o.gen ? `→ +${o.gen * 2} (×2) · +${Math.floor(o.gen * 1.5)} si Grisaille · +${o.gen * 3} si Abondance · pillée en premier` : '';
-    case 'def': return o.def ? `→ ${o.def} dé(s) de défense ce tour · batteries consommées, même sans attaque` : '';
-    case 'atk':
-      if (!o.atk) return '';
-      if (o.atkTarget == null) return '⚠ choisis une cible';
-      return `→ ${nm(o.atkTarget)} · ${o.atk} dé(s) d'attaque · chaque dé en trop pille 2`;
-    case 'xfer':
-      if (!o.xfer) return '';
-      return o.xferTarget == null ? '⚠ choisis une cible' : `→ ${o.xfer} pour ${nm(o.xferTarget)}`;
-    case 'bid': return o.bid ? `→ mise de ${o.bid} sur ${g.value.lotCount} lot(s) · payée même si tu perds` : '';
-    case 'ref': {
-      if (!o.ref) return '';
-      const r = Math.floor(o.ref / 3);
-      const rest = o.ref % 3 ? ` · ${o.ref % 3} non raffinée(s), rendue(s)` : '';
-      return `→ Razoonium ${me.value.razoonium || 0} → ${(me.value.razoonium || 0) + r} (3 🔋 = 1)${rest}`;
-    }
-  }
-  return '';
-}
-
 let poll;
 let clock;
 let lastDeadlineReload = 0;
@@ -589,3 +707,64 @@ onBeforeUnmount(() => {
   document.removeEventListener('visibilitychange', onVisible);
 });
 </script>
+
+<style scoped>
+.hintline { margin: 10px 0 0; font-size: 14px; }
+.hintline b, .lime { color: var(--lime); }
+.teal { color: #2bffc6; }
+.red { color: var(--red); }
+.tag.over { color: var(--red); border-color: var(--red); }
+.btn.sm { padding: 4px 10px; font-size: 12px; }
+
+/* Recette */
+.recipe { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-top: 18px; }
+.ing { display: grid; grid-template-columns: auto auto auto; grid-template-rows: auto auto; column-gap: 8px; align-items: center;
+  padding: 8px 12px; border: 1px solid color-mix(in srgb, var(--c) 45%, transparent);
+  background: linear-gradient(135deg, color-mix(in srgb, var(--c) 12%, transparent), transparent); color: var(--c); }
+.ing .v-icon { grid-row: span 2; }
+.ing .q { font-family: 'Orbitron'; font-weight: 700; font-size: 18px; }
+.ing .nm { grid-column: 2; font-size: 12px; color: var(--soft); }
+.ing .have { grid-column: 3; grid-row: 1 / 3; margin-left: 6px; font-family: 'Orbitron'; font-size: 12px; color: var(--red); }
+.ing.ok .have { color: var(--lime); }
+.eq { font-family: 'Orbitron'; font-size: 22px; color: var(--muted); }
+
+/* Inventaire */
+.inv { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 8px; margin-top: 18px; }
+.rcell { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 2px 8px; padding: 8px 10px; min-width: 0;
+  border: 1px solid color-mix(in srgb, var(--c) 30%, transparent); background: color-mix(in srgb, var(--c) 6%, transparent); color: var(--c); }
+.rcell.own { border-color: var(--c); box-shadow: 0 0 12px color-mix(in srgb, var(--c) 30%, transparent); }
+.rcell.zero { opacity: .45; }
+.rcell .nm { font-size: 14px; color: var(--soft); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rcell .v { font-family: 'Orbitron'; font-weight: 700; font-size: 20px; }
+.rcell .s { grid-column: 1 / -1; font-size: 11px; color: var(--muted); }
+.rcell .s.red { color: var(--red); }
+.rcell.pay { grid-template-columns: auto 1fr; }
+.rcell.pay .stepper { grid-column: 1 / -1; margin-top: 4px; }
+.stepper.mini { grid-template-columns: 32px 1fr 32px; }
+.stepper.mini .val { font-size: 16px; padding: 3px 0; }
+
+/* Ordres */
+.raids { display: flex; flex-direction: column; gap: 6px; }
+.raidrow { display: grid; grid-template-columns: 1fr 120px; align-items: center; gap: 8px; border-left: 3px solid var(--c); padding-left: 8px; }
+.raidrow .tn { color: var(--c); font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.paybox { margin-top: 16px; padding: 12px 14px; border: 1px dashed var(--line-strong); }
+.paybox .phead { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+.paybox .inv { margin-top: 10px; }
+.mchip { display: inline-flex; align-items: center; gap: 2px; margin-right: 8px; font-family: 'Orbitron'; font-size: 12px; color: var(--text); }
+
+/* Troc */
+.feed { margin: 14px 0 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 4px; font-size: 15px; color: var(--soft); }
+.feed li::before { content: "▸ "; color: var(--cyan); }
+
+/* Dômes */
+.domes { display: flex; flex-direction: column; gap: 8px; }
+.dome { display: grid; grid-template-columns: minmax(120px, 1fr) 2fr 64px; gap: 10px; align-items: center; padding: 8px 12px;
+  border: 1px solid var(--line); border-left: 3px solid var(--c); }
+.dome .tn { color: var(--c); font-weight: 700; display: flex; flex-direction: column; min-width: 0; }
+.dome .tn small { color: var(--muted); font-weight: 500; }
+.dome .num { text-align: right; font-family: 'Orbitron'; font-weight: 700; }
+@media (max-width: 860px) {
+  .dome { grid-template-columns: 1fr auto; }
+  .dome .stock { grid-column: 1 / -1; grid-row: 2; }
+}
+</style>

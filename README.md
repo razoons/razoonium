@@ -1,6 +1,6 @@
 # 🪐 Razoonium
 
-Jeu de stratégie tour par tour quotidien (4 à 8 joueurs) en **Progressive Web App** — voir [rules.md](rules.md).
+Jeu de troc, de négociation et de trahison au tour par tour (4 à 8 joueurs) en **Progressive Web App** — voir [rules.md](rules.md).
 
 Application web full-stack déployée sur **Google Cloud Run** (backend) et **Firebase Hosting** (frontend).
 
@@ -21,7 +21,7 @@ Application web full-stack déployée sur **Google Cloud Run** (backend) et **Fi
 | `frontend/src/views/Game.vue` | Salle d'attente + console de jeu |
 | `frontend/src/styles/razoonium.css` | Thème néon |
 
-Firestore : `users/{pseudo}`, `games/{id}` (état public de la partie), `games/{id}/orders/{uid}` (ordres secrets du jour, jamais renvoyés aux autres joueurs).
+Firestore : `users/{pseudo}`, `games/{id}` (état public de la partie), `games/{id}/orders/{uid}` (ordres secrets du jour : Marché Noir et raffinage, jamais renvoyés aux autres joueurs). Les dons sont appliqués immédiatement à `games/{id}` (`POST /api/games/:id/gift`).
 
 Icônes PWA : générées depuis `frontend/public/favicon.svg` avec `cd frontend && npx pwa-assets-generator`.
 

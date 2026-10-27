@@ -23,6 +23,7 @@ function randomCode() {
 /* Vue d'une partie pour un joueur donné (les ordres des autres restent secrets) */
 function viewFor(game, id, uid, ordersDocs) {
   const me = game.players.findIndex((p) => p.uid === uid);
+  const n = game.players.length;
   const current = ordersDocs.filter((o) => o.day === game.day);
   const mine = current.find((o) => o.uid === uid);
   return {
@@ -31,6 +32,8 @@ function viewFor(game, id, uid, ordersDocs) {
     name: game.name,
     hostId: game.hostId,
     status: game.status,
+    // partie lancée avec les anciennes règles (batteries) : plus jouable
+    legacy: game.status !== 'lobby' && game.version !== engine.RULES_VERSION,
     turnHours: game.turnHours,
     earlyResolve: game.earlyResolve,
     minPlayers: MIN_PLAYERS,
@@ -38,17 +41,21 @@ function viewFor(game, id, uid, ordersDocs) {
     maxDays: game.maxDays ?? engine.MAX_DAYS,
     palette: engine.COLORS,
     emblems: engine.EMBLEMS,
+    rules: { production: engine.PRODUCTION, invLimit: engine.INV_LIMIT, raidCost: engine.RAID_COST, lottoCost: engine.LOTTO_COST },
+    resources: engine.RESOURCES.slice(0, n),
     players: game.players,
     day: game.day ?? 0,
-    lotCount: (game.lots ?? []).length, // contenu des lots caché jusqu'à la résolution
-    lastWeather: game.lastWeather ?? null,
+    recipe: game.recipe ?? null,
+    market: game.market ?? null,
+    // dons du tour en cours : seuls ceux que ce joueur a faits ou reçus
+    feed: (game.feed ?? []).filter((g) => g.from === me || g.to === me),
     log: engine.logFor(game.log ?? [], me), // seules les lignes qui concernent ce joueur
     history: game.history ?? [],
     ranking: game.ranking ?? null,
     deadline: game.deadline ?? null,
     ready: game.players.map((p) => !!current.find((o) => o.uid === p.uid && o.ready)),
     me,
-    myOrders: mine ? mine.orders : engine.emptyOrders(),
+    myOrders: mine ? mine.orders : engine.emptyOrders(n),
     myReady: !!mine?.ready,
   };
 }
@@ -64,61 +71,60 @@ function summaryFor(game, id, uid) {
     maxDays: game.maxDays ?? engine.MAX_DAYS,
     deadline: game.deadline ?? null,
     playerCount: game.players.length,
-    batteries: me?.batteries ?? null,
+    stock: me?.inv ? engine.total(me.inv) : null,
     razoonium: me?.razoonium ?? 0,
-    alive: me?.alive ?? true,
     isHost: game.hostId === uid,
   };
 }
 
 // ── Notifications ────────────────────────────────────────────────────────────
 
-const WEATHER_TXT = { gloom: '☁ Grisaille', calm: '☾ Calme', abundance: '☀ Abondance' };
-const signed = (n) => (n >= 0 ? `+${n}` : `${n}`);
+/* Texte brut d'un vecteur de ressources : « 2 Plasma + 1 Spores » */
+function vecPlain(vec) {
+  return vec.map((q, k) => (q ? `${q} ${engine.RESOURCES[k].name}` : null)).filter(Boolean).join(' + ');
+}
 
 function turnMessages(id, game) {
   const last = game.log[0];
   const tag = `game-${id}`;
   const url = `/game/${id}?tab=journal`;
-  return game.players.flatMap((p, idx) => {
+  return game.players.map((p, idx) => {
     if (game.status === 'over') {
       const rank = game.ranking.indexOf(idx) + 1;
-      return [{
+      return {
         uid: p.uid,
         payload: {
           title: `🏆 ${game.name} — partie terminée`,
-          body: rank !== 1 ? `Tu finis #${rank} sur ${game.players.length}.`
-            : p.alive ? `Victoire ! Tu finis #1 avec ${p.razoonium || 0} Razoonium.`
-              : 'Tous les dômes se sont éteints — tu as tenu le plus longtemps (#1).',
+          body: rank === 1 ? `Victoire ! Tu finis #1 avec ${p.razoonium} Razoonium.`
+            : `Tu finis #${rank} sur ${game.players.length} avec ${p.razoonium} Razoonium.`,
           url: `/game/${id}?tab=score`, tag,
         },
-      }];
+      };
     }
-    if (p.elimDay === last.day) {
-      return [{ uid: p.uid, payload: { title: `☠ ${game.name}`, body: `Jour ${last.day} : ton dôme s'est éteint.`, url, tag } }];
-    }
-    if (!p.alive) return [];
     const b = last.bilan.find((x) => x.id === idx);
-    return [{
+    return {
       uid: p.uid,
       payload: {
         title: `${game.name} · Jour ${last.day} résolu`,
-        body: `${WEATHER_TXT[last.weather]} — 🔋 ${b.before} → ${b.after} (${signed(b.after - b.before)}). Donne tes ordres pour le jour ${game.day} !`,
+        body: `💎 ${p.razoonium} (+${b.r}). Recette du jour ${game.day} : ${vecPlain(game.recipe)}. À vous de troquer !`,
         url, tag,
       },
-    }];
+    };
   });
 }
 
 function launchMessages(id, game) {
-  return game.players.filter((p) => p.uid !== game.hostId).map((p) => ({
-    uid: p.uid,
-    payload: {
-      title: `⚡ ${game.name} a commencé`,
-      body: `Jour 1 — tu as ${engine.START_BATTERIES} 🔋. Résolution dans ${game.turnHours}h : donne tes ordres !`,
-      url: `/game/${id}`, tag: `game-${id}`,
-    },
-  }));
+  return game.players.filter((p) => p.uid !== game.hostId).map((p) => {
+    const r = engine.RESOURCES[p.role];
+    return {
+      uid: p.uid,
+      payload: {
+        title: `⚡ ${game.name} a commencé`,
+        body: `Tu es ${r.role} et tu produis : ${r.name}. Recette du jour 1 : ${vecPlain(game.recipe)}.`,
+        url: `/game/${id}`, tag: `game-${id}`,
+      },
+    };
+  });
 }
 
 /* Rappel aux retardataires avant l'échéance (1h, ou un quart du tour s'il est plus court) */
@@ -127,7 +133,7 @@ async function remindLatecomers(doc, now) {
   const before = Math.min(HOUR, (game.turnHours * HOUR) / 4);
   if (game.reminderDay === game.day || game.deadline - now > before || game.deadline <= now) return false;
   const orders = (await ordersOf(doc.ref).get()).docs.filter((d) => d.data().day === game.day && d.data().ready);
-  const late = game.players.filter((p) => p.alive && !orders.some((d) => d.id === p.uid));
+  const late = game.players.filter((p) => !orders.some((d) => d.id === p.uid));
   await doc.ref.update({ reminderDay: game.day });
   const minutes = Math.max(1, Math.round((game.deadline - now) / 60000));
   await push.sendMany(late.map((p) => ({
@@ -148,7 +154,7 @@ async function maybeResolve(ref) {
     const snap = await tx.get(ref);
     if (!snap.exists) throw new GameError(404, 'Partie introuvable.');
     const game = snap.data();
-    if (game.status !== 'running') return null;
+    if (game.status !== 'running' || game.version !== engine.RULES_VERSION) return null;
 
     const orders = (await tx.get(ordersOf(ref))).docs.map((d) => ({ uid: d.id, ...d.data() }));
     const now = Date.now();
@@ -156,8 +162,7 @@ async function maybeResolve(ref) {
 
     while (game.status === 'running' && resolved < (game.maxDays ?? engine.MAX_DAYS)) {
       const current = orders.filter((o) => o.day === game.day);
-      const alive = game.players.filter((p) => p.alive);
-      const allReady = alive.every((p) => current.some((o) => o.uid === p.uid && o.ready));
+      const allReady = game.players.every((p) => current.some((o) => o.uid === p.uid && o.ready));
       const late = now >= game.deadline;
       if (!late && !(game.earlyResolve && allReady)) break;
 
@@ -374,8 +379,7 @@ async function submitOrders(user, id, rawOrders, ready) {
   const game = snap.data();
   const idx = game.players.findIndex((p) => p.uid === user.uid);
   if (idx < 0) throw new GameError(403, 'Tu ne fais pas partie de cette partie.');
-  if (game.status !== 'running') throw new GameError(409, 'La partie n\'est pas en cours.');
-  if (!game.players[idx].alive) throw new GameError(409, 'Ton dôme est éteint.');
+  if (game.status !== 'running' || game.version !== engine.RULES_VERSION) throw new GameError(409, 'La partie n\'est pas en cours.');
 
   let orders;
   try {
@@ -385,6 +389,39 @@ async function submitOrders(user, id, rawOrders, ready) {
   }
   await ordersOf(ref).doc(user.uid).set({ day: game.day, orders, ready: !!ready, updatedAt: new Date() });
   return getGame(user, id);
+}
+
+/* Don immédiat de ressources à un autre joueur, sans contrepartie garantie */
+async function giveResources(user, id, to, vec) {
+  const ref = games().doc(id);
+  const done = await db.runTransaction(async (tx) => {
+    const snap = await tx.get(ref);
+    if (!snap.exists) throw new GameError(404, 'Partie introuvable.');
+    const game = snap.data();
+    const idx = game.players.findIndex((p) => p.uid === user.uid);
+    if (idx < 0) throw new GameError(403, 'Tu ne fais pas partie de cette partie.');
+    if (game.status !== 'running' || game.version !== engine.RULES_VERSION) throw new GameError(409, 'La partie n\'est pas en cours.');
+    if (Date.now() >= game.deadline) throw new GameError(409, 'Le tour est en cours de résolution.');
+    // le paiement déjà engagé au Marché Noir ne peut pas être donné
+    const mine = (await tx.get(ordersOf(ref).doc(user.uid))).data();
+    let given;
+    try {
+      given = engine.give(game, idx, Number(to), vec, mine?.day === game.day ? mine.orders.pay : null);
+    } catch (e) {
+      throw new GameError(400, e.message);
+    }
+    tx.update(ref, { players: game.players, feed: game.feed });
+    return { game, given };
+  });
+  await push.sendMany([{
+    uid: done.game.players[Number(to)].uid,
+    payload: {
+      title: `🎁 ${done.game.name}`,
+      body: `${user.name} t'envoie ${vecPlain(done.given)}.`,
+      url: `/game/${id}`, tag: `game-${id}-gift`,
+    },
+  }]);
+  return loadView(ref, user.uid);
 }
 
 /* Appelé par Cloud Scheduler : résout les parties arrivées à échéance et relance les retardataires */
@@ -404,5 +441,5 @@ async function tick() {
 }
 
 module.exports = {
-  GameError, listMyGames, createGame, joinGame, listCandidates, addPlayer, leaveGame, setLook, deleteGame, launchGame, getGame, submitOrders, tick,
+  GameError, listMyGames, createGame, joinGame, listCandidates, addPlayer, leaveGame, setLook, deleteGame, launchGame, getGame, submitOrders, giveResources, tick,
 };

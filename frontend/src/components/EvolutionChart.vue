@@ -37,7 +37,7 @@ const props = defineProps({
   players: { type: Array, required: true },
   history: { type: Array, required: true },
   maxDays: { type: Number, default: 15 },
-  metric: { type: String, default: 'b' }, // 'b' batteries, 'r' Razoonium
+  metric: { type: String, default: 'r' }, // 'r' Razoonium, 't' stock total
 });
 
 const box = ref(null);
@@ -68,11 +68,7 @@ const x = (k) => m.l + ((k - 1) / (nDays.value - 1)) * (W.value - m.l - m.r);
 const y = (v) => m.t + (1 - v / scale.value.max) * (H - m.t - m.b);
 
 const series = computed(() => props.players.map((p, id) => {
-  const hist = props.history;
-  // on garde les points tant que le dôme était allumé au relevé précédent (inclut la chute à 0)
-  const pts = hist
-    .filter((h, i) => i === 0 || hist[i - 1].players[id].alive)
-    .map((h) => [x(h.day), y(h.players[id][props.metric] ?? 0)]);
+  const pts = props.history.map((h) => [x(h.day), y(h.players[id]?.[props.metric] ?? 0)]);
   const last = pts[pts.length - 1];
   return { id, color: p.color, points: pts.map((q) => q.join(',')).join(' '), last };
 }));

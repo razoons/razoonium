@@ -13,7 +13,7 @@ export default defineConfig({
       manifest: {
         name: 'Razoonium — Les derniers dômes',
         short_name: 'Razoonium',
-        description: 'Stratégie au tour par tour quotidien pour 4 à 8 joueurs.',
+        description: 'Troc, négociation et trahison au tour par tour pour 4 à 8 joueurs.',
         lang: 'fr',
         start_url: '/',
         display: 'standalone',

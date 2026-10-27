@@ -16,5 +16,6 @@ router.delete('/:id/membership', ctrl.leave);
 router.put('/:id/look', ctrl.look);
 router.post('/:id/start', ctrl.start);
 router.put('/:id/orders', ctrl.orders);
+router.post('/:id/gift', ctrl.gift);
 
 module.exports = router;

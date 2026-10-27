@@ -34,7 +34,7 @@
                 <span>Code <b>{{ g.code }}</b></span>
                 <span v-if="g.status === 'lobby'"><b>{{ g.playerCount }}</b> / 8 dômes</span>
                 <span v-else>Jour <b>{{ Math.min(g.day, g.maxDays) }}</b> / {{ g.maxDays }}</span>
-                <span v-if="g.status === 'running' && g.alive"><v-icon class="mi" size="1.1em" :icon="ICONS.battery" /> <b>{{ g.batteries }}</b></span>
+                <span v-if="g.status === 'running' && g.stock !== null"><v-icon class="mi" size="1.1em" :icon="ICONS.stock" /> <b>{{ g.stock }}</b></span>
                 <span v-if="g.status === 'running'"><v-icon class="mi" size="1.1em" :icon="ICONS.razoonium" /> <b>{{ g.razoonium }}</b></span>
                 <span v-if="g.status === 'running' && g.deadline"><v-icon class="mi" size="1.1em" :icon="ICONS.timer" /> <b class="countdown">{{ timeLeft(g.deadline, now) }}</b></span>
               </div>
@@ -113,20 +113,19 @@ const busy = ref(false);
 const code = ref('');
 const name = ref('');
 const turnHours = ref(24);
-const maxDays = ref(15);
+const maxDays = ref(10);
 const earlyResolve = ref(true);
 
 function statusOf(g) {
   if (g.status === 'lobby') return { cls: 'lobby', label: 'LOBBY' };
   if (g.status === 'over') return { cls: 'over', label: 'TERMINÉE' };
-  if (!g.alive) return { cls: 'out', label: 'ÉTEINT' };
   return { cls: 'wait', label: 'EN COURS' };
 }
 
 function colorOf(g) {
   if (g.status === 'lobby') return 'var(--violet)';
   if (g.status === 'over') return 'var(--muted)';
-  return g.alive ? 'var(--cyan)' : 'var(--red)';
+  return 'var(--cyan)';
 }
 
 async function load() {

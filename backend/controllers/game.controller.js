@@ -47,8 +47,13 @@ async function orders(req, res) {
   res.json(await games.submitOrders(req.user, req.params.id, orders, ready));
 }
 
+async function gift(req, res) {
+  const { to, vec } = req.body || {};
+  res.json(await games.giveResources(req.user, req.params.id, to, vec));
+}
+
 async function tick(_req, res) {
   res.json(await games.tick());
 }
 
-module.exports = { list, create, join, candidates, addPlayer, get, leave, look, remove, start, orders, tick };
+module.exports = { list, create, join, candidates, addPlayer, get, leave, look, remove, start, orders, gift, tick };

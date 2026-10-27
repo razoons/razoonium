@@ -2,7 +2,7 @@
   <div class="page narrow" style="max-width:480px">
     <div class="panel" style="padding:28px">
       <h1 class="hero-title">RAZOONIUM</h1>
-      <p class="sub">Survivre 15 jours. Garder le dôme allumé. Finir avec le plus de batteries.</p>
+      <p class="sub">Un rôle, une ressource. Troquer, trahir, raffiner le plus de Razoonium.</p>
 
       <div class="tabs">
         <button :class="{ on: mode === 'login' }" @click="mode = 'login'">Connexion</button>
