@@ -1,332 +1,492 @@
-// engine.js — Règles de Razoonium (fonctions pures, sans accès base de données)
-// Les lignes de journal utilisent des jetons rendus côté client :
-// {p:N} joueur d'index N, {r:K} ressource d'index K, {i:clé} icône.
-// Les quantités de ressources sont des vecteurs : vec[K] = quantité de la ressource K.
+/* Le Château des Ténèbres — règles du jeu (fonctions pures, l'état est muté en place)
 
-const RULES_VERSION = 2; // parties lancées avant le troc : version absente
-const MAX_DAYS = 10; // durée par défaut ; chaque partie peut fixer la sienne (game.maxDays)
-const MIN_DAYS = 5;
-const MAX_DAYS_LIMIT = 30;
-const MAX_PLAYERS = 8;
+   État d'une partie lancée (doc Firestore games/{id}) :
+     players[i] = { uid, name, color, role, pv, room, hidden, alive, diedRound, ghostRoom, sight }
+       (mort : ghostRoom = où erre son fantôme, sight = null | 'pending' | 'yes' | 'no' : demande de tout voir)
+     round, phase ('order' | 'action'), order (indices des joueurs), turn (index dans order),
+     pending (attaque en attente après un déplacement), blackout, blackoutUsed, killer (index),
+     events (perceptions privées : { id, round, to: [indices], text, noise? } ;
+             all: true = récit omniscient, réservé aux morts autorisés par le Tueur), history (bilans publics),
+     winner ('killer' | 'survivors')
+   Pas de débat dans le jeu (il se tient ailleurs) : une manche finie, la suivante commence.
 
-const PRODUCTION = 3; // ressources attitrées produites par chaque rôle en début de tour
-const START_EACH = 1; // stock initial : 1 de chaque ressource des autres rôles
-const INV_LIMIT = 12; // au-delà, le surplus est défaussé au Marché Noir en fin de tour
-const MARKET_START = 2; // réserve initiale du Marché Noir, par ressource
-const RAID_COST = 3; // Pillage : 3 ressources payées → 1 ressource volée au hasard chez la cible
-const LOTTO_COST = 2; // Loterie : 2 ressources payées → 1 ressource piochée au hasard dans la réserve
-const RECIPE_TYPES = 3; // la Recette du Tour demande 3 ressources différentes…
-const RECIPE_MIN = 4; // … pour 4 à 5 ingrédients au total…
-const RECIPE_MAX = 5;
-const RECIPE_MAX_EACH = 2; // … dont 2 au plus de chaque
+   Dans les textes, {p:N} désigne le joueur N et {r:id} une salle (mis en forme par le client). */
 
-// Une ressource par rôle ; une partie à N joueurs utilise les N premières
-const RESOURCES = [
-  { key: 'scrap',   name: 'Ferraille',  role: 'Ferrailleur',    icon: 'mdi-cog',              color: '#c9a27a' },
-  { key: 'plasma',  name: 'Plasma',     role: 'Ingénieur plasma', icon: 'mdi-flash',          color: '#ffe53b' },
-  { key: 'spores',  name: 'Spores',     role: 'Botaniste',      icon: 'mdi-sprout',           color: '#9dff4a' },
-  { key: 'data',    name: 'Données',    role: 'Netrunner',      icon: 'mdi-database',         color: '#00f0ff' },
-  { key: 'crystal', name: 'Cristaux',   role: 'Mineur',         icon: 'mdi-hexagon-multiple', color: '#c45bff' },
-  { key: 'water',   name: 'Eau lourde', role: 'Hydrologue',     icon: 'mdi-water',            color: '#3d7bff' },
-  { key: 'serum',   name: 'Biogel',     role: 'Médic',          icon: 'mdi-flask',            color: '#ff5470' },
-  { key: 'nanites', name: 'Nanites',    role: 'Nanotechnicien', icon: 'mdi-chip',             color: '#ff6a00' },
+const RULES_VERSION = 1;
+const MIN_PLAYERS = 4;
+const MAX_PLAYERS = 10;
+const START_PV = 3;
+
+const COLORS = ['#e8c170', '#c0392b', '#5dade2', '#58d68d', '#af7ac5', '#f5b041', '#ec7063', '#48c9b0', '#d7dbdd', '#f1948a'];
+
+/* Plan du château : x / y = position sur la carte (grille 3 × 4) */
+const ROOMS = [
+  { id: 'tour', name: 'Tour de guet', the: 'la Tour de guet', icon: 'mdi-chess-rook', x: 0, y: 0 },
+  { id: 'remparts', name: 'Remparts', the: 'les Remparts', icon: 'mdi-wall', x: 1, y: 0 },
+  { id: 'chambre', name: 'Chambre du seigneur', the: 'la Chambre du seigneur', icon: 'mdi-bed-king-outline', x: 2, y: 0 },
+  { id: 'bibliotheque', name: 'Bibliothèque', the: 'la Bibliothèque', icon: 'mdi-bookshelf', x: 0, y: 1 },
+  { id: 'grande_salle', name: 'Grande Salle', the: 'la Grande Salle', icon: 'mdi-castle', x: 1, y: 1 },
+  { id: 'armurerie', name: 'Salle d\'armes', the: 'la Salle d\'armes', icon: 'mdi-sword-cross', x: 2, y: 1 },
+  { id: 'chapelle', name: 'Chapelle', the: 'la Chapelle', icon: 'mdi-church-outline', x: 0, y: 2 },
+  { id: 'cuisine', name: 'Cuisine', the: 'la Cuisine', icon: 'mdi-pot-steam-outline', x: 1, y: 2 },
+  { id: 'ecuries', name: 'Écuries', the: 'les Écuries', icon: 'mdi-horse-variant', x: 2, y: 2 },
+  { id: 'crypte', name: 'Crypte', the: 'la Crypte', icon: 'mdi-coffin', x: 0, y: 3 },
+  { id: 'cachots', name: 'Cachots', the: 'les Cachots', icon: 'mdi-gate', x: 1, y: 3 },
 ];
 
-const COLORS = [
-  '#00f0ff', '#80d8ff', '#3d7bff', '#8a7dff', '#c45bff', '#ff2bd6', '#ff8fc8', '#ff5470', '#ff2a2a',
-  '#ff6a00', '#ffb020', '#ffe53b', '#9dff4a', '#2bd96b', '#2bffc6', '#c9a27a', '#8f9bb3', '#f2f6ff',
+const PASSAGES = [
+  ['tour', 'remparts'], ['remparts', 'chambre'], ['tour', 'bibliotheque'], ['remparts', 'grande_salle'],
+  ['chambre', 'armurerie'], ['bibliotheque', 'grande_salle'], ['grande_salle', 'armurerie'],
+  ['bibliotheque', 'chapelle'], ['grande_salle', 'cuisine'], ['armurerie', 'ecuries'], ['cuisine', 'ecuries'],
+  ['chapelle', 'crypte'], ['cuisine', 'cachots'], ['crypte', 'cachots'],
 ];
 
-// Emblèmes : noms d'icônes Material Design Icons (@mdi/font)
-const EMBLEMS = [
-  'mdi-rocket-launch', 'mdi-alien', 'mdi-robot', 'mdi-ufo', 'mdi-satellite-variant', 'mdi-meteor',
-  'mdi-atom-variant', 'mdi-radioactive', 'mdi-biohazard', 'mdi-skull', 'mdi-ghost',
-  'mdi-spider', 'mdi-snake', 'mdi-bat', 'mdi-jellyfish', 'mdi-crown',
-  'mdi-lightning-bolt', 'mdi-fire', 'mdi-crystal-ball',
-  'mdi-shark', 'mdi-unicorn', 'mdi-bee', 'mdi-turtle', 'mdi-mushroom', 'mdi-cactus',
-  'mdi-space-station', 'mdi-death-star-variant', 'mdi-star-shooting',
-  'mdi-moon-waning-crescent', 'mdi-robot-angry', 'mdi-ninja', 'mdi-pirate',
-  'mdi-virus', 'mdi-drama-masks', 'mdi-triforce', 'mdi-compass-rose', 'mdi-deathly-hallows',
-  'mdi-rocket', 'mdi-turbine', 'mdi-anchor', 'mdi-ship-wheel', 'mdi-axe-battle',
-  'mdi-cards-spade', 'mdi-cards-heart', 'mdi-cards-diamond', 'mdi-cards-club', 'mdi-shield-crown', 'mdi-poker-chip',
-];
+const ADJACENT = Object.fromEntries(ROOMS.map((r) => [r.id, PASSAGES
+  .filter((p) => p.includes(r.id))
+  .map(([a, b]) => (a === r.id ? b : a))]));
 
-/* Première couleur et premier emblème non pris par les joueurs donnés */
-function freeLook(players) {
-  return {
-    color: COLORS.find((c) => !players.some((p) => p.color === c)),
-    icon: EMBLEMS.find((e) => !players.some((p) => p.icon === e)),
-  };
-}
+// Cibles spéciales d'une attaque
+const SELF = 'self';
+const BLIND = 'blind'; // dans le noir : un occupant au hasard
+const HOLD = 'hold';   // retenir son coup
 
-// ── Vecteurs de ressources ──────────────────────────────────────────────────
+const isAdjacent = (a, b) => ADJACENT[a]?.includes(b);
+const randInt = (n) => Math.floor(Math.random() * n);
 
-const rand = (a, b) => a + Math.floor(Math.random() * (b - a + 1));
-const zeros = (n) => Array(n).fill(0);
-const total = (v) => v.reduce((a, b) => a + b, 0);
-const covers = (inv, need) => need.every((q, k) => (inv[k] ?? 0) >= q);
-const add = (a, b, sign = 1) => a.map((x, k) => x + sign * (b[k] ?? 0));
-const raidCost = (o) => RAID_COST * total(o.raids) + LOTTO_COST * o.lotto;
-
-function shuffle(arr) {
-  for (let i = arr.length - 1; i > 0; i--) {
-    const j = rand(0, i);
-    [arr[i], arr[j]] = [arr[j], arr[i]];
+function shuffle(list) {
+  const a = list.slice();
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = randInt(i + 1);
+    [a[i], a[j]] = [a[j], a[i]];
   }
-  return arr;
+  return a;
 }
 
-/* Index tiré au hasard, pondéré par les quantités (une unité = une chance) ; -1 si vide */
-function drawRandom(vec) {
-  let x = Math.floor(Math.random() * total(vec));
-  for (let k = 0; k < vec.length; k++) {
-    if (x < vec[k]) return k;
-    x -= vec[k];
-  }
-  return -1;
+const alive = (game) => game.players.map((p, i) => i).filter((i) => game.players[i].alive);
+const occupants = (game, room) => alive(game).filter((i) => game.players[i].room === room);
+
+/* Salle d'où perçoit un joueur : la sienne, ou celle où erre son fantôme */
+const roomOfViewer = (game, viewer) => {
+  const p = game.players[viewer];
+  return p.alive ? p.room : p.ghostRoom ?? p.room;
+};
+
+/* Joueurs qu'un observateur voit dans sa salle (ni cachés, ni dans le noir) */
+function visibleTo(game, viewer) {
+  if (game.blackout) return [];
+  const room = roomOfViewer(game, viewer);
+  return occupants(game, room).filter((i) => i !== viewer && !game.players[i].hidden);
 }
 
-/* Nombre de fois qu'un stock permet de réunir la recette */
-const refinable = (inv, recipe) => Math.min(...recipe.map((q, k) => (q ? Math.floor(inv[k] / q) : Infinity)));
-
-/* « 2 {r:0} + 1 {r:3} » ; « rien » pour un vecteur vide */
-const vecText = (v) => v.map((q, k) => (q ? `${q} {r:${k}}` : null)).filter(Boolean).join(' + ') || 'rien';
-
-/* Recette du tour : RECIPE_TYPES ressources différentes, RECIPE_MIN à RECIPE_MAX ingrédients,
-   jamais deux fois de suite la même */
-function rollRecipe(n, previous) {
-  for (;;) {
-    const types = shuffle([...Array(n).keys()]).slice(0, RECIPE_TYPES);
-    const r = zeros(n);
-    types.forEach((t) => { r[t] = 1; });
-    for (let left = rand(RECIPE_MIN, RECIPE_MAX) - RECIPE_TYPES; left > 0;) {
-      const t = types[rand(0, types.length - 1)];
-      if (r[t] < RECIPE_MAX_EACH) { r[t]++; left--; }
-    }
-    if (!previous || r.some((q, k) => q !== previous[k])) return r;
-  }
+/* Nombre de joueurs visibles dans chaque salle adjacente (sans les noms ; les cachés n'y figurent pas) */
+function nearbyFor(game, viewer) {
+  if (game.blackout) return {};
+  return Object.fromEntries(ADJACENT[roomOfViewer(game, viewer)]
+    .map((r) => [r, occupants(game, r).filter((i) => !game.players[i].hidden).length])
+    .filter(([, n]) => n > 0));
 }
 
-// ── Ordres ──────────────────────────────────────────────────────────────────
-
-/* Ordres secrets du tour : paiement du Marché Noir, pillages par cible, tirages de loterie, raffinages */
-const emptyOrders = (n) => ({ pay: zeros(n), raids: zeros(n), lotto: 0, refine: 0 });
-
-/* Valide et normalise des ordres reçus d'un client. Lève une Error si invalides. */
-function sanitizeOrders(raw, game, idx) {
-  const n = game.players.length;
-  const int = (v) => {
-    const x = Number(v ?? 0);
-    if (!Number.isInteger(x) || x < 0 || x > 999) throw new Error('Quantité invalide.');
-    return x;
-  };
-  const vec = (v) => Array.from({ length: n }, (_, k) => int(v?.[k]));
-  const o = { pay: vec(raw?.pay), raids: vec(raw?.raids), lotto: int(raw?.lotto), refine: int(raw?.refine) };
-  if (o.raids[idx]) throw new Error('Tu ne peux pas te piller toi-même.');
-  const cost = raidCost(o);
-  if (total(o.pay) !== cost) throw new Error(`Le Marché Noir coûte ${cost} ressource(s) : choisis exactement lesquelles payer.`);
-  if (!covers(game.players[idx].inv, o.pay)) throw new Error('Pas assez de ressources pour ce paiement.');
-  return o;
+/* Cadavres visibles dans la salle de l'observateur */
+function corpsesFor(game, viewer) {
+  if (game.blackout) return [];
+  const room = roomOfViewer(game, viewer);
+  return game.players.map((p, i) => i).filter((i) => !game.players[i].alive && game.players[i].room === room);
 }
 
-/* Don immédiat de `from` à `to` (sans contrepartie garantie). `reserved` : paiement du Marché Noir
-   déjà engagé par le donneur, qui ne peut pas être donné. Modifie `game` en place. */
-function give(game, from, to, raw, reserved) {
-  const n = game.players.length;
-  if (!Number.isInteger(to) || to === from || !game.players[to]) throw new Error('Destinataire invalide.');
-  const vec = Array.from({ length: n }, (_, k) => {
-    const x = Number(raw?.[k] ?? 0);
-    if (!Number.isInteger(x) || x < 0) throw new Error('Quantité invalide.');
-    return x;
+const currentActor = (game) => (game.phase === 'action' ? game.order[game.turn] : null);
+
+// ── Journal privé ────────────────────────────────────────────────────────────
+
+function note(game, to, text, extra = {}) {
+  const list = [...new Set(to)].filter((i) => i !== undefined && i !== null);
+  if (!list.length) return;
+  game.eventSeq = (game.eventSeq ?? 0) + 1;
+  game.events.push({ id: game.eventSeq, round: game.round, to: list, text, ...extra });
+}
+
+/* Récit omniscient : lu seulement par les morts que le Tueur autorise à tout voir */
+function tell(game, text) {
+  game.eventSeq = (game.eventSeq ?? 0) + 1;
+  game.events.push({ id: game.eventSeq, round: game.round, to: [], all: true, text });
+}
+
+/* Bruit entendu par les occupants des salles voisines (hors salles concernées) */
+function noise(game, rooms, text, exclude = []) {
+  const listeners = alive(game).filter((i) => {
+    const r = game.players[i].room;
+    return !rooms.includes(r) && !exclude.includes(i) && rooms.some((x) => isAdjacent(r, x));
   });
-  if (!total(vec)) throw new Error('Rien à donner.');
-  const giver = game.players[from];
-  if (!covers(add(giver.inv, reserved || zeros(n), -1), vec)) {
-    throw new Error('Pas assez de ressources (celles engagées au Marché Noir ne peuvent pas être données).');
-  }
-  giver.inv = add(giver.inv, vec, -1);
-  game.players[to].inv = add(game.players[to].inv, vec);
-  game.feed = [...(game.feed || []), { from, to, vec, at: Date.now() }];
-  return vec;
-}
-
-// ── Déroulement ─────────────────────────────────────────────────────────────
-
-/* Phase 1 : chaque rôle produit sa ressource attitrée */
-function produce(game) {
-  game.players.forEach((p) => { p.inv[p.role] += PRODUCTION; });
-}
-
-function snapshot(game) {
-  game.history.push({
-    day: game.day,
-    players: game.players.map((p) => ({ r: p.razoonium, t: total(p.inv) })),
+  // regroupé par salle d'écoute : chacun n'entend que les salles qui touchent la sienne
+  const byRoom = new Map();
+  listeners.forEach((i) => {
+    const r = game.players[i].room;
+    if (!byRoom.has(r)) byRoom.set(r, []);
+    byRoom.get(r).push(i);
+  });
+  byRoom.forEach((who, r) => {
+    const heard = rooms.filter((x) => isAdjacent(r, x));
+    const where = heard.length > 1 ? `entre {r:${heard[0]}} et {r:${heard[1]}}` : `vers {r:${heard[0]}}`;
+    note(game, who, text.replace('%', where), { noise: heard });
   });
 }
 
-/* Initialise l'état de jeu à partir des membres du lobby */
+// ── Mise en place ────────────────────────────────────────────────────────────
+
 function startGame(game) {
-  // Les joueurs arrivés avant le choix de couleur/emblème reçoivent les premiers libres
-  for (const p of game.players) {
-    if (!p.color) p.color = freeLook(game.players).color;
-    if (!p.icon) p.icon = freeLook(game.players).icon;
-  }
   const n = game.players.length;
-  const roles = shuffle([...Array(n).keys()]);
-  game.players = game.players.map((p, i) => ({
-    ...p,
-    role: roles[i],
-    inv: zeros(n).map((_, k) => (k === roles[i] ? 0 : START_EACH)),
-    razoonium: 0,
-  }));
-  game.version = RULES_VERSION;
-  game.day = 1;
-  game.market = zeros(n).fill(MARKET_START);
-  game.recipe = rollRecipe(n);
-  game.feed = [];
-  game.log = [];
-  game.history = [];
-  game.status = 'running';
-  produce(game);
-  snapshot(game);
-  return game;
+  const killer = randInt(n);
+  game.players.forEach((p, i) => {
+    Object.assign(p, {
+      color: COLORS[i % COLORS.length],
+      role: i === killer ? 'TUEUR' : 'SURVIVANT',
+      pv: START_PV,
+      room: ROOMS[randInt(ROOMS.length)].id,
+      hidden: false,
+      alive: true,
+      diedRound: null,
+    });
+  });
+  Object.assign(game, {
+    version: RULES_VERSION,
+    status: 'running',
+    killer,
+    round: 1,
+    phase: 'order',
+    order: [],
+    turn: 0,
+    pending: null,
+    blackout: false,
+    blackoutUsed: false,
+    events: [],
+    eventSeq: 0,
+    history: [],
+    walls: {},
+    wallRounds: {},
+    winner: null,
+  });
+  game.players.forEach((p, i) => {
+    note(game, [i], i === killer
+      ? 'Tu es le Tueur. Élimine tous les survivants sans te faire démasquer.'
+      : 'Tu es un Survivant. Démasque le Tueur et abats-le avant qu\'il ne vous élimine.');
+    note(game, [i], `Tu te réveilles dans {r:${p.room}}.`);
+    tell(game, `{p:${i}} se réveille dans {r:${p.room}}${i === killer ? ' : c\'est le Tueur.' : '.'}`);
+  });
 }
 
-/*
- * Résout un tour (phases 3 à 5). `ordersByIdx` : Map index joueur → ordres.
- * Les dons (phase 2) ont déjà été appliqués au fil du tour. Modifie `game` en place et le renvoie.
- */
-function resolveTurn(game, ordersByIdx) {
-  const day = game.day;
-  const n = game.players.length;
-  const P = game.players;
-  // Journal : les lignes publiques sont des chaînes ; les autres { t, to } ne sont vues que des joueurs listés
-  const lines = [];
-  const say = (text, ...to) => lines.push(to.length ? { t: text, to } : text);
-  const before = P.map((p) => ({ r: p.razoonium, t: total(p.inv) }));
+// ── Phase 1 : ordre de passage ───────────────────────────────────────────────
 
-  lines.push(`Recette du jour : ${vecText(game.recipe)} = 1 {i:razoonium}.`);
+/* Le Tueur choisit sa position (1 = premier) et, une fois par partie, le Blackout */
+function chooseOrder(game, position, blackout) {
+  if (game.phase !== 'order') throw new Error('Ce n\'est pas le moment de choisir l\'ordre.');
+  const living = alive(game);
+  const pos = Number(position);
+  if (!Number.isInteger(pos) || pos < 1 || pos > living.length) throw new Error('Position invalide.');
+  if (blackout && game.blackoutUsed) throw new Error('Le Blackout a déjà été utilisé.');
 
-  // Phase 2 (rappel) : les dons du tour, vus des seuls donneur et receveur
-  (game.feed || []).forEach((g) => say(`{p:${g.from}} donne ${vecText(g.vec)} à {p:${g.to}}.`, g.from, g.to));
+  const others = shuffle(living.filter((i) => i !== game.killer));
+  others.splice(pos - 1, 0, game.killer);
+  Object.assign(game, { order: others, turn: 0, pending: null, phase: 'action', blackout: !!blackout });
+  if (blackout) game.blackoutUsed = true;
 
-  // Ordres revérifiés : un paiement devenu impossible annule les actions du Marché Noir (pas le raffinage)
-  const O = P.map((p, id) => {
-    const raw = ordersByIdx.get(id) || {};
-    const o = { ...emptyOrders(n), ...raw };
-    o.raids = o.raids.map((c, t) => (t === id ? 0 : c));
-    if (total(o.pay) !== raidCost(o) || !covers(p.inv, o.pay)) {
-      if (raidCost(o)) say(`{p:${id}} : paiement du Marché Noir invalide, pillages et loterie annulés.`, id);
-      Object.assign(o, { pay: zeros(n), raids: zeros(n), lotto: 0 });
-    }
-    return o;
-  });
-
-  // Phase 3 : Marché Noir. Les paiements rejoignent d'abord la réserve…
-  O.forEach((o, id) => {
-    if (!total(o.pay)) return;
-    say(`{p:${id}} paie ${vecText(o.pay)} au Marché Noir.`, id);
-    P[id].inv = add(P[id].inv, o.pay, -1);
-    game.market = add(game.market, o.pay);
-  });
-
-  // … puis les pillages, dans un ordre aléatoire : 1 ressource au hasard dans le stock de la cible
-  const raids = shuffle(O.flatMap((o, from) => o.raids.flatMap((c, to) => Array(c).fill({ from, to }))));
-  const loot = new Map(); // "from-to" → { from, to, tries, got }
-  raids.forEach(({ from, to }) => {
-    const key = `${from}-${to}`;
-    if (!loot.has(key)) loot.set(key, { from, to, tries: 0, got: zeros(n) });
-    const l = loot.get(key);
-    l.tries++;
-    const k = drawRandom(P[to].inv);
-    if (k < 0) return;
-    P[to].inv[k]--;
-    P[from].inv[k]++;
-    l.got[k]++;
-  });
-  loot.forEach(({ from, to, tries, got }) => {
-    say(total(got)
-      ? `{i:raid} {p:${from}} pille {p:${to}} (${tries} fois) et lui vole ${vecText(got)}.`
-      : `{i:raid} {p:${from}} pille {p:${to}} (${tries} fois), mais son stock est vide.`, from, to);
-  });
-
-  // … puis la loterie, piochée dans la réserve (paiements du tour compris : on peut retomber sur sa mise)
-  O.forEach((o, id) => {
-    if (!o.lotto) return;
-    const got = zeros(n);
-    for (let i = 0; i < o.lotto; i++) {
-      const k = drawRandom(game.market);
-      if (k < 0) break;
-      game.market[k]--;
-      P[id].inv[k]++;
-      got[k]++;
-    }
-    say(`{i:lotto} Loterie : {p:${id}} pioche ${vecText(got)} (${o.lotto} tirage(s)).`, id);
-  });
-
-  // Phase 4 : Raffinage, sur le stock après le Marché Noir. Les ingrédients rejoignent la réserve.
-  O.forEach((o, id) => {
-    if (!o.refine) return;
-    const k = Math.min(o.refine, refinable(P[id].inv, game.recipe));
-    if (k) {
-      const used = game.recipe.map((q) => q * k);
-      P[id].inv = add(P[id].inv, used, -1);
-      game.market = add(game.market, used);
-      P[id].razoonium += k;
-      say(`{i:refine} {p:${id}} raffine ${k} {i:razoonium}.`);
-    }
-    if (k < o.refine) say(`{p:${id}} ne réunit la recette que ${k} fois sur ${o.refine} demandée(s).`, id);
-  });
-
-  // Phase 5 : limite d'inventaire, le surplus (ressource la plus abondante d'abord) part au Marché Noir
-  P.forEach((p, id) => {
-    const over = total(p.inv) - INV_LIMIT;
-    if (over <= 0) return;
-    const lost = zeros(n);
-    for (let i = 0; i < over; i++) {
-      const k = p.inv.indexOf(Math.max(...p.inv));
-      p.inv[k]--;
-      lost[k]++;
-      game.market[k]++;
-    }
-    say(`{p:${id}} dépasse la limite de ${INV_LIMIT} : ${vecText(lost)} défaussé(s) au Marché Noir.`, id);
-  });
-
-  const bilan = P.map((p, id) => ({ id, r: p.razoonium - before[id].r, before: before[id].t, after: total(p.inv) }));
-  game.log.unshift({ day, recipe: game.recipe, lines, bilan });
-  game.feed = [];
-
-  // Tour suivant : nouvelle recette, puis production
-  game.day++;
-  if (game.day > (game.maxDays ?? MAX_DAYS)) {
-    game.status = 'over';
-    game.ranking = ranking(game);
-  } else {
-    game.recipe = rollRecipe(n, game.recipe);
-    produce(game);
+  others.forEach((i, k) => note(game, [i], `Manche ${game.round} : tu joues en position ${k + 1} sur ${others.length}.`));
+  tell(game, `Le Tueur se place en position ${pos}. Ordre de passage : ${others.map((i) => `{p:${i}}`).join(', ')}.`);
+  if (blackout) tell(game, 'Le Tueur déclenche le Blackout.');
+  if (blackout) {
+    note(game, living, 'Le courant est coupé ! Le château est plongé dans le noir pour toute la manche.', { blackout: true });
   }
-  snapshot(game);
-  return game;
 }
 
-/* Classement : le plus de Razoonium, puis le plus gros stock */
-function ranking(game) {
-  return game.players
-    .map((p, id) => ({ id, p }))
-    .sort((a, b) => b.p.razoonium - a.p.razoonium || total(b.p.inv) - total(a.p.inv))
-    .map((x) => x.id);
+/* Délai écoulé : position tirée au hasard, pas de Blackout */
+function timeoutOrder(game) {
+  note(game, [game.killer], 'Tu as tardé : ta position a été tirée au hasard.');
+  chooseOrder(game, randInt(alive(game).length) + 1, false);
 }
 
-/* Journal vu par le joueur d'index `me` : lignes publiques + celles qui le concernent */
-function logFor(log, me) {
-  return log.map((e) => ({
-    ...e,
-    lines: e.lines.filter((l) => typeof l === 'string' || l.to.includes(me)).map((l) => (typeof l === 'string' ? l : l.t)),
-  }));
+// ── Phase 2 : actions ────────────────────────────────────────────────────────
+
+/* Passe dans une salle voisine : se déplacer rend visible */
+function move(game, actor, dest) {
+  const p = game.players[actor];
+  if (!isAdjacent(p.room, dest)) throw new Error('Cette salle n\'est pas adjacente.');
+  const from = p.room;
+  const wasSeen = !p.hidden && !game.blackout;
+
+  // départ : les occupants le voient partir s'il était visible
+  const stay = occupants(game, from).filter((i) => i !== actor);
+  if (wasSeen) note(game, stay, `{p:${actor}} quitte la salle vers {r:${dest}}.`);
+  else if (game.blackout) note(game, stay, 'Des pas s\'éloignent tout près de toi, dans le noir.');
+
+  const there = occupants(game, dest);
+  p.room = dest;
+  p.hidden = false;
+  if (game.blackout) note(game, there, 'Quelqu\'un entre dans la salle, dans le noir.');
+  else note(game, there, `{p:${actor}} entre dans la salle, depuis {r:${from}}.`);
+
+  noise(game, [from, dest], 'Des bruits de pas %.', [actor]);
+  note(game, [actor], `Tu te rends dans {r:${dest}}.`);
+  tell(game, `{p:${actor}} passe de {r:${from}} à {r:${dest}}.`);
+}
+
+/* Cibles possibles d'une attaque pour le joueur dans sa salle actuelle */
+function targetsFor(game, actor) {
+  if (game.blackout) return [BLIND, SELF, HOLD];
+  return [...visibleTo(game, actor), SELF, HOLD];
+}
+
+function parseTarget(game, actor, target) {
+  const t = typeof target === 'number' || /^\d+$/.test(String(target)) ? Number(target) : target;
+  if (!targetsFor(game, actor).includes(t)) throw new Error('Cible invalide (elle doit être visible dans ta salle).');
+  return t;
+}
+
+/* t : cible déjà validée par parseTarget */
+function attack(game, actor, t) {
+  const p = game.players[actor];
+  p.hidden = false; // frapper révèle
+  const room = p.room;
+  if (t === HOLD) {
+    note(game, [actor], 'Tu retiens ton coup.');
+    tell(game, `{p:${actor}} lève son arme dans {r:${room}}… et retient son coup.`);
+    return;
+  }
+
+  let victim = t === SELF ? actor : t;
+  if (t === BLIND) {
+    const pool = occupants(game, room).filter((i) => i !== actor);
+    victim = pool.length ? pool[randInt(pool.length)] : null;
+  }
+
+  const witnesses = occupants(game, room).filter((i) => i !== actor && i !== victim);
+  noise(game, [room], 'Un cri retentit %.');
+
+  if (victim === null) {
+    note(game, [actor], 'Tu frappes dans le noir… ton coup ne rencontre que le vide.');
+    tell(game, `{p:${actor}} frappe dans le noir de {r:${room}}, dans le vide.`);
+    return;
+  }
+
+  const v = game.players[victim];
+  v.pv -= 1;
+  const dies = v.pv <= 0;
+
+  // la victime sait seulement qu'elle a été touchée et les présents entendent un cri…
+  // …sauf ceux qui étaient cachés : à l'abri des regards, eux voient la scène (pas dans le noir)
+  const hiddenWitnesses = game.blackout ? [] : witnesses.filter((i) => game.players[i].hidden);
+  const plainWitnesses = witnesses.filter((i) => !hiddenWitnesses.includes(i));
+  tell(game, victim === actor
+    ? `{p:${actor}} se blesse volontairement dans {r:${room}} (${Math.max(0, v.pv)} PV).`
+    : `{p:${actor}} frappe {p:${victim}} dans {r:${room}}${game.blackout ? ', dans le noir' : ''} (${Math.max(0, v.pv)} PV).`);
+  if (victim === actor) note(game, [actor], `Tu t'infliges une blessure (${Math.max(0, v.pv)} PV).`);
+  else {
+    note(game, [actor], game.blackout
+      ? 'Tu frappes dans le noir… ton coup porte : quelqu\'un gémit.'
+      : `Tu frappes {p:${victim}}.`);
+    note(game, [victim], `Tu as été attaqué ! (${Math.max(0, v.pv)} PV)`);
+  }
+  note(game, plainWitnesses, 'Un cri retentit dans ta salle.');
+  note(game, hiddenWitnesses, victim === actor
+    ? `Caché, tu vois {p:${actor}} se blesser lui-même !`
+    : `Caché, tu vois {p:${actor}} frapper {p:${victim}} !`);
+
+  if (dies) {
+    v.pv = 0;
+    v.alive = false;
+    v.diedRound = game.round;
+    v.ghostRoom = v.room;
+    v.sight = null;
+    tell(game, `{p:${victim}} meurt dans {r:${room}}.`);
+    note(game, [victim], 'Tu t\'effondres. Tu es mort.');
+    if (game.blackout) note(game, witnesses.concat(victim === actor ? [] : [actor]), 'Un corps s\'effondre dans le noir.');
+    else note(game, witnesses.concat(victim === actor ? [] : [actor]), `{p:${victim}} s'effondre, mort.`);
+  }
+  checkWinner(game);
+}
+
+function checkWinner(game) {
+  if (game.winner) return;
+  const killer = game.players[game.killer];
+  if (!killer.alive) game.winner = 'survivors';
+  else if (alive(game).length === 1) game.winner = 'killer';
+  if (game.winner) endGame(game);
+}
+
+function endGame(game) {
+  game.status = 'over';
+  game.phase = null;
+  game.pending = null;
+  game.history.push(bilan(game, true));
+}
+
+/* Un tour = une suite d'actions simples :
+   se cacher (seul) · se déplacer → frapper ou rester · frapper → se déplacer ou rester.
+   game.pending = { moved, attacked } entre deux actions du même joueur. */
+const STEPS = ['hide', 'move', 'attack', 'end'];
+
+function stepsFor(game) {
+  const pd = game.pending;
+  if (!pd) return ['hide', 'move', 'attack'];
+  if (pd.attacked) return ['move', 'end'];
+  return ['attack', 'end'];
+}
+
+function finishTurn(game) {
+  game.pending = null;
+  return nextTurn(game);
+}
+
+/* Valide et applique une action du joueur dont c'est le tour : { step, dest?, target? }.
+   Renvoie true si la manche est terminée. */
+function act(game, actor, { step, dest, target } = {}) {
+  if (game.status !== 'running' || game.phase !== 'action') throw new Error('Ce n\'est pas la phase d\'actions.');
+  if (currentActor(game) !== actor) throw new Error('Ce n\'est pas ton tour.');
+  if (!STEPS.includes(step)) throw new Error('Action inconnue.');
+  if (!stepsFor(game).includes(step)) {
+    if (step === 'hide') throw new Error('On ne peut se cacher qu\'en début de tour, sans rien faire d\'autre.');
+    if (step === 'move') throw new Error('Tu t\'es déjà déplacé ce tour-ci.');
+    if (step === 'attack') throw new Error('Tu as déjà frappé ce tour-ci.');
+    throw new Error('Tu n\'as encore rien fait ce tour-ci.');
+  }
+  const p = game.players[actor];
+  const pd = game.pending ?? {};
+
+  if (step === 'hide') {
+    p.hidden = true;
+    note(game, [actor], `Tu te caches dans {r:${p.room}}.`);
+    tell(game, `{p:${actor}} se cache dans {r:${p.room}}.`);
+    return finishTurn(game);
+  }
+
+  if (step === 'end') {
+    note(game, [actor], `Tu restes dans {r:${p.room}}.`);
+    tell(game, `{p:${actor}} reste dans {r:${p.room}}.`);
+    return finishTurn(game);
+  }
+
+  if (step === 'move') {
+    move(game, actor, dest);
+    if (pd.attacked) return finishTurn(game);
+    game.pending = { moved: true, attacked: false };
+    return false;
+  }
+
+  attack(game, actor, parseTarget(game, actor, target));
+  if (pd.moved || game.status !== 'running' || !p.alive) return finishTurn(game);
+  game.pending = { moved: false, attacked: true };
+  return false;
+}
+
+/* Délai écoulé pendant un tour : on reste caché, ou là où l'on en est */
+function timeoutTurn(game) {
+  const actor = currentActor(game);
+  if (game.pending) note(game, [actor], 'Tu as hésité trop longtemps : tu en restes là.');
+  else {
+    game.players[actor].hidden = true;
+    note(game, [actor], 'Tu as hésité trop longtemps : tu restes caché sur place.');
+    tell(game, `{p:${actor}} tarde et reste caché dans {r:${game.players[actor].room}}.`);
+  }
+  return finishTurn(game);
+}
+
+/* Passe au prochain joueur vivant ; termine la manche quand tous ont joué. Renvoie true si la manche est finie. */
+function nextTurn(game) {
+  if (game.status !== 'running') return true;
+  game.turn++;
+  while (game.turn < game.order.length && !game.players[game.order[game.turn]].alive) game.turn++;
+  if (game.turn < game.order.length) return false;
+  endRound(game);
+  return true;
+}
+
+// ── Fin de manche : bilan public, puis manche suivante ───────────────────────
+
+function bilan(game, final = false) {
+  return {
+    round: game.round,
+    blackout: !!game.blackout,
+    players: game.players.map((p) => ({ pv: p.pv, alive: p.alive })),
+    deaths: game.players
+      .map((p, i) => ({ id: i, room: p.room, round: p.diedRound }))
+      .filter((d) => d.round === game.round)
+      .map(({ id, room }) => ({ id, room })),
+    final,
+  };
+}
+
+function endRound(game) {
+  game.history.push(bilan(game));
+  nextRound(game);
+}
+
+// ── Messages sur les murs ────────────────────────────────────────────────────
+
+const WALL_MAX_LEN = 120;
+
+/* Un joueur caché peut écrire, anonymement, un message par manche sur le mur de sa salle */
+function canWrite(game, idx) {
+  const p = game.players[idx];
+  return game.status === 'running' && p.alive && p.hidden && game.wallRounds?.[idx] !== game.round;
+}
+
+function writeWall(game, idx, text) {
+  const msg = String(text || '').trim().slice(0, WALL_MAX_LEN);
+  if (!msg) throw new Error('Message vide.');
+  if (!game.players[idx].hidden) throw new Error('Il faut être caché pour écrire sur le mur sans être vu.');
+  if (!canWrite(game, idx)) throw new Error('Tu as déjà écrit sur un mur cette manche.');
+  const room = game.players[idx].room;
+  game.walls = game.walls ?? {};
+  game.wallRounds = game.wallRounds ?? {};
+  game.walls[room] = [...(game.walls[room] ?? []), { round: game.round, text: msg, author: idx }];
+  game.wallRounds[idx] = game.round;
+  note(game, [idx], `Tu écris sur le mur de {r:${room}} : « ${msg} »`);
+  tell(game, `{p:${idx}} écrit sur le mur de {r:${room}} : « ${msg} »`);
+}
+
+/* Messages lisibles par l'observateur sur le mur de sa salle (anonymes ; illisibles dans le noir) */
+function wallFor(game, viewer) {
+  if (game.blackout) return [];
+  return (game.walls?.[roomOfViewer(game, viewer)] ?? []).map(({ round, text }) => ({ round, text }));
+}
+
+// ── Les morts ────────────────────────────────────────────────────────────────
+
+/* Le fantôme d'un mort erre librement de salle en salle, sans être perçu */
+function ghostMove(game, idx, dest) {
+  const p = game.players[idx];
+  if (game.status !== 'running') throw new Error('La partie n\'est pas en cours.');
+  if (p.alive) throw new Error('Seuls les morts errent en fantôme.');
+  if (!isAdjacent(roomOfViewer(game, idx), dest)) throw new Error('Cette salle n\'est pas adjacente.');
+  p.ghostRoom = dest;
+}
+
+/* Un mort demande à tout voir (une seule fois) ; le Tueur accepte ou refuse */
+function requestSight(game, idx) {
+  const p = game.players[idx];
+  if (game.status !== 'running') throw new Error('La partie n\'est pas en cours.');
+  if (p.alive) throw new Error('Seuls les morts peuvent demander à tout voir.');
+  if (p.sight) throw new Error(p.sight === 'pending' ? 'Ta demande attend déjà la réponse du Tueur.' : 'Tu as déjà fait ta demande.');
+  p.sight = 'pending';
+}
+
+const sightRequests = (game) => game.players.map((p, i) => i).filter((i) => game.players[i].sight === 'pending');
+
+function answerSight(game, by, idx, accept) {
+  if (game.status !== 'running') throw new Error('La partie n\'est pas en cours.');
+  if (by !== game.killer) throw new Error('Seul le Tueur répond à cette demande.');
+  if (game.players[idx]?.sight !== 'pending') throw new Error('Aucune demande en attente pour ce joueur.');
+  game.players[idx].sight = accept ? 'yes' : 'no';
+  note(game, [idx], accept
+    ? 'Le Tueur a accepté : tu vois désormais tout ce qui se passe au château.'
+    : 'Le Tueur a refusé : ton fantôme ne pourra qu\'errer dans le château.');
+  note(game, [by], `Tu ${accept ? 'acceptes' : 'refuses'} que {p:${idx}} voie tout.`);
+}
+
+function nextRound(game) {
+  game.round++;
+  Object.assign(game, { phase: 'order', order: [], turn: 0, pending: null, blackout: false });
 }
 
 module.exports = {
-  RULES_VERSION, MAX_DAYS, MIN_DAYS, MAX_DAYS_LIMIT, MAX_PLAYERS, RESOURCES, COLORS, EMBLEMS,
-  PRODUCTION, INV_LIMIT, RAID_COST, LOTTO_COST,
-  freeLook, total, vecText, emptyOrders, sanitizeOrders, give, startGame, resolveTurn, ranking, logFor,
+  RULES_VERSION, MIN_PLAYERS, MAX_PLAYERS, START_PV, COLORS, ROOMS, PASSAGES, ADJACENT, SELF, BLIND, HOLD,
+  alive, occupants, roomOfViewer, visibleTo, nearbyFor, corpsesFor, targetsFor, currentActor,
+  startGame, chooseOrder, timeoutOrder, stepsFor, act, timeoutTurn, canWrite, writeWall, wallFor, ghostMove, requestSight, sightRequests, answerSight,
 };

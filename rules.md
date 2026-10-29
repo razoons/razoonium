@@ -1,87 +1,108 @@
-# 🪐 Razoonium — Règles du Jeu
+# 🏰 Spécifications Techniques et Règles : "Le Château des Ténèbres"
 
-Un jeu de **troc, de négociation et de trahison** pour **4 à 8 joueurs**, dans un dôme cyberpunk en pénurie. Chacun produit une seule ressource, et il en faut plusieurs pour marquer des points : il faut donc négocier. Aucune victoire coopérative n'est possible, il n'y a qu'**un seul vainqueur**.
-
----
-
-## 🎯 1. Le But du Jeu
-
-- La partie dure **10 jours** (10 tours) par défaut ; le créateur peut choisir de 5 à 30 tours.
-- À la fin, le joueur qui possède **le plus de Razoonium** gagne.
-- Le Razoonium s'obtient en **raffinant** la **Recette du Tour**. Une fois acquis, il est définitif et ne peut pas être volé.
-- **Égalité** : le plus gros stock de ressources passe devant.
+Document de spécifications pour le développement de l'application (Jeu de traître / Déduction sociale / Tour par tour).
 
 ---
 
-## ⚙️ 2. Rôles & Ressources
+## 🎲 1. Concept Général & Rôles
 
-- Il y a **autant de ressources que de joueurs** (4 joueurs = 4 ressources, 8 joueurs = 8 ressources).
-- Au lancement, chaque joueur reçoit au hasard un **rôle unique** qui produit **sa ressource attitrée** :
+* **Nombre de joueurs :** 4 à 10 joueurs.
+* **Durée / Structure :** Parties découpées en **manches** (tours de table).
+* **Rôles :**
+  * **1 Tueur** (désigné secrètement au début par l'application).
+  * **N-1 Survivants**.
+* **Points de Vie (PV) :** Chaque joueur commence avec **3 PV**.
 
-| Rôle | Ressource |
-| :--- | :--- |
-| Ferrailleur | Ferraille |
-| Ingénieur plasma | Plasma |
-| Botaniste | Spores |
-| Netrunner | Données |
-| Mineur | Cristaux |
-| Hydrologue | Eau lourde |
-| Médic | Biogel |
-| Nanotechnicien | Nanites |
-
-- **Production** : au début de chaque tour, chaque rôle produit **3 unités** de sa ressource.
-- **Stock initial** : **1 unité de chaque ressource des autres rôles**.
-- **Limite d'inventaire** : **12 ressources**. En fin de tour, le surplus est défaussé au Marché Noir (la ressource la plus abondante d'abord).
-- **Les stocks sont publics** : chacun voit ce que les autres possèdent.
+### Conditions de Victoire
+* **Victoire des Survivants :** Le Tueur atteint 0 PV (il meurt).
+* **Victoire du Tueur :** Le Tueur est le dernier joueur en vie (ou tous les survivants sont morts).
 
 ---
 
-## 🧪 3. La Recette du Tour
+## 🗺️ 2. Carte & Perception (Salles et Visibilité)
 
-- Une nouvelle recette est révélée au **début de chaque tour**. Elle ne revient jamais deux fois de suite.
-- Elle demande **3 ressources différentes**, pour **4 à 5 ingrédients** au total (2 au plus de chaque).
-- *Exemple :* `2 Plasma + 1 Spores + 1 Données = 1 Razoonium`.
-- Comme la recette change à chaque tour, les alliances ne durent pas : il faut sans cesse changer de partenaires.
+La carte du jeu est un graphe de salles adjacentes (ex: *Grande Salle, Cachots, Cuisine, Remparts, Bibliothèque, etc.*).
 
----
-
-## 🤝 4. Le Troc (dons libres)
-
-- Pendant le tour, tu peux **donner** à tout moment n'importe quelle quantité de tes ressources à un autre joueur.
-- Le don est **immédiat et irréversible**, et **rien ne garantit la contrepartie** : promesses, échanges, chantage et trahisons se négocient sur le chat (ou sur Discord).
-- Les dons ne sont visibles que du donneur et du receveur (mais les stocks, eux, sont publics).
-- Les ressources déjà engagées au Marché Noir (ordre validé) ne peuvent pas être données.
+### Règles de Perception
+1. **Dans la salle actuelle :**
+   * Un joueur voit la liste de tous les joueurs **visibles** présents avec lui.
+   * **Absence d'indices pour les cachés :** Un joueur ayant exécuté l'action "Se cacher" est **totalement invisible**. Si tous les joueurs d'une salle sont cachés, la salle apparaît comme strictement vide. Aucun indice visuel ou textuel n'indique leur présence.
+2. **Dans les salles adjacentes (Acoustique) :**
+   * L'interface indique si des bruits/mouvements ont lieu dans les salles connectées (déplacements, attaques).
+3. **Attaques :** anonymes pour la victime et les présents visibles (ils n'entendent qu'un cri). Un joueur **caché** dans la salle voit qui frappe qui (sauf pendant un Blackout).
+4. **Les morts :** le fantôme d'un mort erre librement de salle en salle, invisible, et perçoit ce qu'un vivant y verrait. Il peut, une seule fois, **demander à tout voir** : si le Tueur accepte, il voit tout (identité du Tueur, positions de tous, cachés compris, déplacements, attaques) ; sinon il ne peut qu'errer. Les morts ne parlent pas.
 
 ---
 
-## 🕶️ 5. Le Marché Noir
+## 🔄 3. Déroulement d'une Manche (Cycle de Jeu)
 
-Ces actions sont des **ordres secrets**, exécutés à la fin du tour. Tu choisis toi-même **quelles ressources payer**.
+Chaque manche se décompose en 3 phases distinctes :
 
-1. **Pillage** : paie **3 ressources** pour voler **1 ressource au hasard** dans le stock d'un rival. Tu peux piller plusieurs fois, la même cible ou des cibles différentes. La victime sait qui l'a pillée.
-2. **Loterie** : paie **2 ressources** pour piocher **1 ressource au hasard** dans la réserve du Marché Noir. Les ressources payées entrent dans la réserve **avant** le tirage : tu peux retomber sur ce que tu viens de sacrifier.
+### Phase 1 : Détermination de l'Ordre de Passage
+1. **Choix Secret du Tueur :** En premier lieu, le Tueur choisit la position exacte dans laquelle il souhaite agir pour la manche à venir (ex: 1er, 4e, dernier, etc.).
+2. **Tirage Aléatoire pour les autres :** L'application attribue aléatoirement les positions restantes aux Survivants.
+3. **Secret de l'ordre :** Chaque joueur connaît uniquement **sa propre position** dans le tour. Il ne connaît pas l'ordre des autres joueurs.
 
-La **réserve du Marché Noir** commence avec 2 unités de chaque ressource. Elle se remplit avec les paiements du Marché Noir, les ingrédients raffinés et les surplus d'inventaire. Son contenu est public.
+### Phase 2 : Phase d'Actions (Tour par Tour)
+Les joueurs exécutent leur tour les uns après les autres, selon l'ordre déterminé. À son tour, un joueur choisit **une seule** des 4 options d'action suivantes :
+
+1. `SE_CACHER`
+   * Le joueur reste dans sa salle actuelle et passe en état **Caché** (invisible pour tous les joueurs qui entreraient ou seraient déjà dans la salle).
+2. `DEPLACER_PUIS_SE_CACHER`
+   * Le joueur se déplace vers une salle adjacente.
+   * Il termine son mouvement en état **Caché**.
+3. `DEPLACER_PUIS_ATTAQUER`
+   * Le joueur se déplace vers une salle adjacente.
+   * Il porte un coup (inflige 1 PV de dégât) à un joueur **visible** présent dans la nouvelle salle (ou s'inflige 1 PV à lui-même pour bluffer).
+4. `ATTAQUER_PUIS_DEPLACER`
+   * Le joueur porte un coup (1 PV de dégât) à un joueur **visible** dans sa salle actuelle (ou à lui-même).
+   * Il se déplace ensuite immédiatement vers une salle adjacente.
 
 ---
 
-## 📑 6. Déroulement d'un Tour
+## 🃏 4. Pouvoir Spécial du Tueur : Le Blackout
 
-Chaque tour dure un temps fixé à la création de la partie (**24h, 12h, 6h ou 1h**).
+* **Fréquence :** 1 fois par partie.
+* **Déclenchement :** Le Tueur peut choisir d'activer son Joker "Blackout" au début d'une manche.
+* **Effet :** 
+  * Le courant est coupé dans tout le château pour l'ensemble de la manche.
+  * La visibilité est annulée : **aucun joueur ne voit qui se trouve dans la même salle**, que les joueurs soient cachés ou non.
+  * Les déplacements et attaques s'effectuent à l'aveugle.
 
-1. **Production & Recette** : la nouvelle recette est révélée, chaque rôle produit sa ressource.
-2. **Négociation & Troc** : pendant toute la durée du tour, les joueurs négocient et se font des dons.
-3. **Ordres secrets** : avant l'échéance, chacun indique ses **Pillages**, ses tirages de **Loterie**, leur **paiement**, et **combien de fois il veut raffiner**. Les ordres restent modifiables jusqu'à la résolution.
-4. **Résolution** à l'échéance (ou dès que tout le monde a validé, si la *résolution anticipée* est activée) :
-   1. Les paiements du Marché Noir rejoignent la réserve.
-   2. Les **pillages** sont exécutés dans un ordre aléatoire.
-   3. Les tirages de **Loterie** sont effectués.
-   4. Le **Raffinage** : chacun raffine autant de fois qu'il l'a demandé, dans la limite de ce que son stock permet *après* le Marché Noir.
-   5. La **limite d'inventaire** est appliquée.
-5. **Fin de tour** : les scores sont mis à jour et un nouveau tour commence.
+---
 
-> ⚠️ Un paiement devenu impossible annule les Pillages et la Loterie du joueur (pas son Raffinage).
+## 💬 5. Bilan de fin de manche
 
-> 💡 Les ressources volées ou piochées arrivent **avant** le raffinage : un pillage réussi peut compléter ta recette.
+* À la fin de chaque manche (quand tous les joueurs vivants ont joué), l'application affiche un bilan partiel (joueurs blessés, cadavres découverts) et notifie tout le monde ; la manche suivante commence aussitôt.
+* Le débat (confronter les indices, accuser, mentir) se tient **hors de l'application**, sur WhatsApp. Il n'y a pas de tchat en partie.
 
-Le **journal de bord** ne te montre que ce qui te concerne (tes dons, tes pillages donnés ou subis, ta loterie) ainsi que les événements publics (recette, raffinages de chacun).
+---
+
+## 💻 6. Structure de Données Suggérée (Pour le Dev)
+
+```json
+{
+  "gameState": {
+    "gameId": "string",
+    "status": "LOBBY | IN_PROGRESS | FINISHED",
+    "currentRound": "number",
+    "blackoutActive": "boolean",
+    "tueurId": "string"
+  },
+  "player": {
+    "id": "string",
+    "name": "string",
+    "role": "SURVIVANT | TUEUR",
+    "pv": 3,
+    "currentRoom": "string",
+    "isHidden": "boolean",
+    "turnOrder": "number",
+    "isAlive": "boolean"
+  },
+  "room": {
+    "id": "string",
+    "name": "string",
+    "adjacentRoomIds": ["string"]
+  }
+}
+```

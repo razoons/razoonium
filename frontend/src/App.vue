@@ -1,13 +1,12 @@
 <template>
   <v-app>
-    <div class="bg-grid" />
-    <div class="scan" />
+    <div class="fog" />
 
     <header class="top">
       <div class="top-row">
-        <router-link to="/" class="brand">RAZOONIUM<small>LES DERNIERS DÔMES</small></router-link>
+        <router-link to="/" class="brand"><v-icon size="24">mdi-castle</v-icon><span>Château des Ténèbres<small>UN TUEUR RÔDE</small></span></router-link>
         <div class="spacer" />
-        <span v-if="auth.user" class="who">Commandant <b>{{ auth.user.username }}</b></span>
+        <span v-if="auth.user" class="who"><b>{{ auth.user.username }}</b></span>
         <div class="top-actions">
           <button
             v-if="auth.user && (push.supported || push.needsInstall)"
@@ -42,8 +41,8 @@
       <div v-if="showInstallBar" class="install-bar">
         <v-icon size="26" color="secondary">mdi-cellphone-arrow-down</v-icon>
         <div class="txt">
-          <b>Installe Razoonium</b>
-          <span>Plein écran, accès direct, notifications de tour</span>
+          <b>Installe le Château</b>
+          <span>Plein écran, accès direct, alerte quand c'est ton tour</span>
         </div>
         <button class="btn primary" @click="installApp">Installer</button>
         <button class="btn ghost icon" title="Plus tard" @click="dismissInstall"><v-icon size="18">mdi-close</v-icon></button>
@@ -54,7 +53,7 @@
     <v-dialog v-model="install.helpOpen" max-width="420">
       <div class="panel" style="padding:24px">
         <div class="ptitle">
-          Installer Razoonium
+          Installer le Château
           <button class="btn ghost icon" title="Fermer" @click="install.helpOpen = false"><v-icon size="18">mdi-close</v-icon></button>
         </div>
         <ol class="install-steps">
@@ -67,8 +66,8 @@
             <span>Choisis <b>« Sur l'écran d'accueil »</b>, puis <b>Ajouter</b></span>
           </li>
           <li>
-            <v-icon size="22" color="primary">mdi-hexagon-outline</v-icon>
-            <span>Ouvre <b>Razoonium</b> depuis la nouvelle icône : plein écran et notifications activables</span>
+            <v-icon size="22" color="primary">mdi-castle</v-icon>
+            <span>Ouvre <b>le Château</b> depuis la nouvelle icône : plein écran et notifications activables</span>
           </li>
         </ol>
         <button class="btn primary block" @click="install.helpOpen = false">Compris</button>
@@ -97,7 +96,7 @@ const { needRefresh, updateServiceWorker } = useRegisterSW();
 watch(() => auth.user, (user) => { if (user) initPush().catch(() => {}); }, { immediate: true });
 
 // « Plus tard » : bandeau masqué 7 jours sur cet appareil
-const DISMISS_KEY = 'razoonium.installDismissedAt';
+const DISMISS_KEY = 'chateau.installDismissedAt';
 const DISMISS_MS = 7 * 24 * 3600e3;
 function readDismissed() {
   try {
@@ -122,7 +121,7 @@ function dismissInstall() {
 }
 
 async function installApp() {
-  if (await promptInstall()) toast('Razoonium installé');
+  if (await promptInstall()) toast('Château installé');
 }
 
 async function togglePush() {

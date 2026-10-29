@@ -4,226 +4,286 @@ const engine = require('./game.engine');
 const push = require('./push.service');
 
 const COLLECTION = 'games';
-const HOUR = 3600 * 1000;
-const TURN_HOURS = [24, 12, 6, 1];
-const MIN_PLAYERS = Number(process.env.MIN_PLAYERS) || 4;
+const GAME_KIND = 'chateau'; // distingue les parties de ce jeu des anciennes (Razoonium)
+const TURN_SECONDS = [60, 180, 900, 7200, 43200];
+const MIN_PLAYERS = Number(process.env.MIN_PLAYERS) || engine.MIN_PLAYERS;
 const CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+const CHAT_LIMIT = 150;
+const CHAT_MAX_LEN = 300;
 
 class GameError extends Error {
   constructor(status, message) { super(message); this.status = status; }
 }
 
 const games = () => db.collection(COLLECTION);
-const ordersOf = (ref) => ref.collection('orders');
+const chatOf = (ref) => ref.collection('chat');
+const isLegacy = (game) => game.kind !== GAME_KIND;
 
 function randomCode() {
   return Array.from(crypto.randomBytes(6), (b) => CODE_ALPHABET[b % CODE_ALPHABET.length]).join('');
 }
 
-/* Vue d'une partie pour un joueur donné (les ordres des autres restent secrets) */
-function viewFor(game, id, uid, ordersDocs) {
+/* Les règles lèvent des Error simples : on les traduit en 400 */
+function rule(fn) {
+  try {
+    return fn();
+  } catch (e) {
+    throw new GameError(400, e.message);
+  }
+}
+
+// ── Délais ───────────────────────────────────────────────────────────────────
+
+function phaseMs(game) {
+  if (game.status !== 'running') return null;
+  return game.turnSeconds * 1000;
+}
+
+function resetDeadline(game, from = Date.now()) {
+  const ms = phaseMs(game);
+  game.deadline = ms === null ? null : from + ms;
+}
+
+/* Fait avancer la partie quand l'échéance est dépassée.
+   Chaque nouvelle étape repart d'un délai complet : un joueur notifié en retard garde tout son temps. */
+function advance(game, now = Date.now()) {
+  let steps = 0;
+  while (game.status === 'running' && steps < 50) {
+    if (now < game.deadline) break;
+    if (game.phase === 'order') engine.timeoutOrder(game);
+    else engine.timeoutTurn(game);
+    resetDeadline(game, now);
+    steps++;
+  }
+  return steps > 0;
+}
+
+// ── Notifications ────────────────────────────────────────────────────────────
+
+/* Étape de jeu courante : une notification n'est envoyée que lorsqu'elle change */
+const stageOf = (game) => `${game.status}:${game.round}:${game.phase}:${game.turn}:${game.pending ? 1 : 0}`;
+
+function stageMessages(id, game) {
+  const tag = `game-${id}`;
+  const url = `/game/${id}`;
+  const all = (payload) => game.players.map((p) => ({ uid: p.uid, payload }));
+  if (game.status === 'over') {
+    const k = game.players[game.killer];
+    return all({
+      title: `🏰 ${game.name} — partie terminée`,
+      body: game.winner === 'killer' ? `Le Tueur ${k.name} a éliminé tous les survivants.` : `Le Tueur ${k.name} est tombé. Les survivants l'emportent !`,
+      url, tag,
+    });
+  }
+  if (game.phase === 'order') {
+    const choose = 'Choisis ta position dans l\'ordre de passage.';
+    const last = game.history[game.history.length - 1];
+    if (!last) {
+      return [{ uid: game.players[game.killer].uid, payload: { title: `🗡 ${game.name} · Manche ${game.round}`, body: choose, url, tag } }];
+    }
+    // fin de manche : le bilan à tous (le débat se tient hors du jeu), et au Tueur son choix
+    const dead = last.deaths.map((d) => game.players[d.id].name);
+    const news = dead.length ? `Cadavre(s) découvert(s) : ${dead.join(', ')}.` : 'Personne n\'est mort… cette fois.';
+    return game.players.map((p, i) => ({
+      uid: p.uid,
+      payload: { title: `🏰 ${game.name} · Fin de la manche ${last.round}`, body: i === game.killer ? `${news} ${choose}` : news, url, tag },
+    }));
+  }
+  if (game.phase === 'action' && !game.pending) {
+    const actor = game.players[engine.currentActor(game)];
+    return [{
+      uid: actor.uid,
+      payload: { title: `🕯 ${game.name} · Manche ${game.round}`, body: 'C\'est ton tour d\'agir.', url, tag },
+    }];
+  }
+  return [];
+}
+
+/* Applique une mutation dans une transaction, fait avancer la partie, puis prévient les joueurs concernés */
+async function mutate(ref, fn) {
+  const result = await db.runTransaction(async (tx) => {
+    const snap = await tx.get(ref);
+    if (!snap.exists) throw new GameError(404, 'Partie introuvable.');
+    const game = snap.data();
+    if (isLegacy(game)) return { game, changed: false };
+    const before = stageOf(game);
+    const touched = fn ? fn(game) !== false : false;
+    const advanced = advance(game);
+    const changed = touched || advanced || before !== stageOf(game);
+    if (changed) tx.set(ref, game);
+    return { game, changed, notify: before !== stageOf(game) };
+  });
+  // hors transaction : une transaction peut être rejouée, pas les notifications
+  if (result.notify) await push.sendMany(stageMessages(ref.id, result.game));
+  return result.game;
+}
+
+// ── Vues ─────────────────────────────────────────────────────────────────────
+
+function settingsOf(game) {
+  return { turnSeconds: game.turnSeconds };
+}
+
+function viewFor(game, id, uid, chat) {
   const me = game.players.findIndex((p) => p.uid === uid);
-  const n = game.players.length;
-  const current = ordersDocs.filter((o) => o.day === game.day);
-  const mine = current.find((o) => o.uid === uid);
-  return {
+  const base = {
     id,
     code: game.code,
     name: game.name,
     hostId: game.hostId,
     status: game.status,
-    // partie lancée avec les anciennes règles (batteries) : plus jouable
-    legacy: game.status !== 'lobby' && game.version !== engine.RULES_VERSION,
-    turnHours: game.turnHours,
-    earlyResolve: game.earlyResolve,
+    legacy: isLegacy(game),
+    ...settingsOf(game),
     minPlayers: MIN_PLAYERS,
     maxPlayers: engine.MAX_PLAYERS,
-    maxDays: game.maxDays ?? engine.MAX_DAYS,
-    palette: engine.COLORS,
-    emblems: engine.EMBLEMS,
-    rules: { production: engine.PRODUCTION, invLimit: engine.INV_LIMIT, raidCost: engine.RAID_COST, lottoCost: engine.LOTTO_COST },
-    resources: engine.RESOURCES.slice(0, n),
-    players: game.players,
-    day: game.day ?? 0,
-    recipe: game.recipe ?? null,
-    market: game.market ?? null,
-    // dons du tour en cours : seuls ceux que ce joueur a faits ou reçus
-    feed: (game.feed ?? []).filter((g) => g.from === me || g.to === me),
-    log: engine.logFor(game.log ?? [], me), // seules les lignes qui concernent ce joueur
-    history: game.history ?? [],
-    ranking: game.ranking ?? null,
-    deadline: game.deadline ?? null,
-    ready: game.players.map((p) => !!current.find((o) => o.uid === p.uid && o.ready)),
     me,
-    myOrders: mine ? mine.orders : engine.emptyOrders(n),
-    myReady: !!mine?.ready,
+    players: game.players.map((p) => ({ uid: p.uid, name: p.name, color: p.color ?? null })),
+    chat,
+  };
+  if (base.legacy || game.status === 'lobby') return base;
+
+  const p = game.players[me];
+  const order = game.order ?? [];
+  const myTurn = game.status === 'running' && p.alive && engine.currentActor(game) === me;
+  const last = game.history[game.history.length - 1];
+  const over = game.status === 'over';
+  const here = engine.roomOfViewer(game, me); // mort : la salle où erre son fantôme
+  const seesAll = !p.alive && p.sight === 'yes';
+  const running = game.status === 'running';
+  return {
+    ...base,
+    rooms: engine.ROOMS,
+    passages: engine.PASSAGES,
+    startPv: engine.START_PV,
+    round: game.round,
+    phase: game.phase,
+    deadline: game.deadline,
+    blackout: !!game.blackout,
+    turnNumber: game.phase === 'action' ? game.turn + 1 : null,
+    turnCount: game.phase === 'action' ? order.length : engine.alive(game).length,
+    // état public : celui du dernier bilan (blessures et morts annoncées)
+    public: last ? last.players : game.players.map(() => ({ pv: engine.START_PV, alive: true })),
+    history: game.history,
+    events: game.events.filter((e) => e.to.includes(me) || (seesAll && e.all)).map(({ to, ...e }) => e),
+    my: {
+      role: p.role,
+      pv: p.pv,
+      alive: p.alive,
+      room: here,
+      hidden: p.hidden,
+      position: order.includes(me) && game.phase === 'action' ? order.indexOf(me) + 1 : null,
+      played: game.phase === 'action' && order.indexOf(me) >= 0 && order.indexOf(me) < game.turn,
+      adjacent: engine.ADJACENT[here],
+      visible: engine.visibleTo(game, me),
+      corpses: engine.corpsesFor(game, me),
+      wall: engine.wallFor(game, me),
+      canWrite: engine.canWrite(game, me),
+      nearby: running ? engine.nearbyFor(game, me) : {},
+      // mort : demande de tout voir (null | 'pending' | 'yes' | 'no') ; Tueur : demandes à trancher
+      sight: p.alive ? null : p.sight ?? null,
+      sightRequests: running && me === game.killer && p.alive ? engine.sightRequests(game) : [],
+      chooseOrder: game.status === 'running' && game.phase === 'order' && me === game.killer,
+      blackoutAvailable: p.role === 'TUEUR' && !game.blackoutUsed,
+      myTurn,
+      pending: myTurn ? game.pending ?? null : null, // { moved, attacked } entre deux actions du tour
+      steps: myTurn ? engine.stepsFor(game) : [],
+      targets: myTurn ? engine.targetsFor(game, me) : [],
+    },
+    winner: game.winner ?? null,
+    // mort autorisé par le Tueur : tout le château, en direct
+    omni: seesAll && running ? {
+      killer: game.killer,
+      players: game.players.map((x) => ({ room: x.room, hidden: x.hidden, alive: x.alive, pv: x.pv })),
+    } : null,
+    // fin de partie : tout est révélé
+    reveal: over ? {
+      killer: game.killer,
+      players: game.players.map((x) => ({ role: x.role, pv: x.pv, alive: x.alive, room: x.room })),
+    } : null,
   };
 }
 
 function summaryFor(game, id, uid) {
-  const me = game.players.find((p) => p.uid === uid);
+  const me = game.players.findIndex((p) => p.uid === uid);
+  const p = game.players[me];
+  const legacy = isLegacy(game);
   return {
     id,
     code: game.code,
     name: game.name,
     status: game.status,
-    day: game.day ?? 0,
-    maxDays: game.maxDays ?? engine.MAX_DAYS,
-    deadline: game.deadline ?? null,
+    legacy,
+    round: legacy ? null : game.round ?? null,
+    phase: legacy ? null : game.phase ?? null,
+    deadline: legacy ? null : game.deadline ?? null,
     playerCount: game.players.length,
-    stock: me?.inv ? engine.total(me.inv) : null,
-    razoonium: me?.razoonium ?? 0,
+    maxPlayers: engine.MAX_PLAYERS,
+    alive: !legacy && game.status !== 'lobby' ? p?.alive : null,
+    pv: !legacy && game.status !== 'lobby' ? p?.pv : null,
+    myTurn: !legacy && game.status === 'running'
+      && (engine.currentActor(game) === me || (game.phase === 'order' && game.killer === me)),
     isHost: game.hostId === uid,
   };
 }
 
-// ── Notifications ────────────────────────────────────────────────────────────
-
-/* Texte brut d'un vecteur de ressources : « 2 Plasma + 1 Spores » */
-function vecPlain(vec) {
-  return vec.map((q, k) => (q ? `${q} ${engine.RESOURCES[k].name}` : null)).filter(Boolean).join(' + ');
-}
-
-function turnMessages(id, game) {
-  const last = game.log[0];
-  const tag = `game-${id}`;
-  const url = `/game/${id}?tab=journal`;
-  return game.players.map((p, idx) => {
-    if (game.status === 'over') {
-      const rank = game.ranking.indexOf(idx) + 1;
-      return {
-        uid: p.uid,
-        payload: {
-          title: `🏆 ${game.name} — partie terminée`,
-          body: rank === 1 ? `Victoire ! Tu finis #1 avec ${p.razoonium} Razoonium.`
-            : `Tu finis #${rank} sur ${game.players.length} avec ${p.razoonium} Razoonium.`,
-          url: `/game/${id}?tab=score`, tag,
-        },
-      };
-    }
-    const b = last.bilan.find((x) => x.id === idx);
-    return {
-      uid: p.uid,
-      payload: {
-        title: `${game.name} · Jour ${last.day} résolu`,
-        body: `💎 ${p.razoonium} (+${b.r}). Recette du jour ${game.day} : ${vecPlain(game.recipe)}. À vous de troquer !`,
-        url, tag,
-      },
-    };
-  });
-}
-
-function launchMessages(id, game) {
-  return game.players.filter((p) => p.uid !== game.hostId).map((p) => {
-    const r = engine.RESOURCES[p.role];
-    return {
-      uid: p.uid,
-      payload: {
-        title: `⚡ ${game.name} a commencé`,
-        body: `Tu es ${r.role} et tu produis : ${r.name}. Recette du jour 1 : ${vecPlain(game.recipe)}.`,
-        url: `/game/${id}`, tag: `game-${id}`,
-      },
-    };
-  });
-}
-
-/* Rappel aux retardataires avant l'échéance (1h, ou un quart du tour s'il est plus court) */
-async function remindLatecomers(doc, now) {
-  const game = doc.data();
-  const before = Math.min(HOUR, (game.turnHours * HOUR) / 4);
-  if (game.reminderDay === game.day || game.deadline - now > before || game.deadline <= now) return false;
-  const orders = (await ordersOf(doc.ref).get()).docs.filter((d) => d.data().day === game.day && d.data().ready);
-  const late = game.players.filter((p) => !orders.some((d) => d.id === p.uid));
-  await doc.ref.update({ reminderDay: game.day });
-  const minutes = Math.max(1, Math.round((game.deadline - now) / 60000));
-  await push.sendMany(late.map((p) => ({
-    uid: p.uid,
-    payload: {
-      title: `⏱ ${game.name} · Jour ${game.day}`,
-      body: `Résolution dans ${minutes >= 60 ? `${Math.round(minutes / 60)}h` : `${minutes} min`} et tu n'as pas validé tes ordres.`,
-      url: `/game/${doc.id}`, tag: `game-${doc.id}`,
-    },
-  })));
-  return late.length > 0;
-}
-
-/* Résout tous les tours dus (échéance passée, ou tout le monde prêt). Transactionnel.
-   Renvoie true si au moins un tour a été résolu (et prévient alors les joueurs). */
-async function maybeResolve(ref) {
-  const resolvedGame = await db.runTransaction(async (tx) => {
-    const snap = await tx.get(ref);
-    if (!snap.exists) throw new GameError(404, 'Partie introuvable.');
-    const game = snap.data();
-    if (game.status !== 'running' || game.version !== engine.RULES_VERSION) return null;
-
-    const orders = (await tx.get(ordersOf(ref))).docs.map((d) => ({ uid: d.id, ...d.data() }));
-    const now = Date.now();
-    let resolved = 0;
-
-    while (game.status === 'running' && resolved < (game.maxDays ?? engine.MAX_DAYS)) {
-      const current = orders.filter((o) => o.day === game.day);
-      const allReady = game.players.every((p) => current.some((o) => o.uid === p.uid && o.ready));
-      const late = now >= game.deadline;
-      if (!late && !(game.earlyResolve && allReady)) break;
-
-      const byIdx = new Map();
-      current.forEach((o) => {
-        const idx = game.players.findIndex((p) => p.uid === o.uid);
-        if (idx >= 0) byIdx.set(idx, o.orders);
-      });
-      engine.resolveTurn(game, byIdx);
-      game.deadline = late ? game.deadline + game.turnHours * HOUR : now + game.turnHours * HOUR;
-      resolved++;
-    }
-
-    if (resolved) {
-      if (game.status === 'over') game.deadline = null;
-      tx.set(ref, game);
-    }
-    return resolved ? game : null;
-  });
-  // hors transaction : une transaction peut être rejouée, pas les notifications
-  if (resolvedGame) await push.sendMany(turnMessages(ref.id, resolvedGame));
-  return !!resolvedGame;
+async function loadChat(ref) {
+  const snap = await chatOf(ref).orderBy('at', 'desc').limit(CHAT_LIMIT).get();
+  return snap.docs.map((d) => ({ id: d.id, ...d.data() })).reverse();
 }
 
 async function loadView(ref, uid) {
-  const [snap, ordersSnap] = await Promise.all([ref.get(), ordersOf(ref).get()]);
+  const [snap, chat] = await Promise.all([ref.get(), loadChat(ref)]);
   if (!snap.exists) throw new GameError(404, 'Partie introuvable.');
   const game = snap.data();
   if (!game.playerIds.includes(uid)) throw new GameError(403, 'Tu ne fais pas partie de cette partie.');
-  return viewFor(game, snap.id, uid, ordersSnap.docs.map((d) => ({ uid: d.id, ...d.data() })));
+  return viewFor(game, snap.id, uid, chat);
 }
 
-// ── API ──────────────────────────────────────────────────────────────────────
+function playerIndex(game, uid) {
+  const idx = game.players.findIndex((p) => p.uid === uid);
+  if (idx < 0) throw new GameError(403, 'Tu ne fais pas partie de cette partie.');
+  return idx;
+}
+
+function requireRunning(game) {
+  if (game.status !== 'running') throw new GameError(409, 'La partie n\'est pas en cours.');
+}
+
+// ── Lobby ────────────────────────────────────────────────────────────────────
 
 async function listMyGames(uid) {
   const snap = await games().where('playerIds', 'array-contains', uid).get();
   const order = { running: 0, lobby: 1, over: 2 };
   return snap.docs
     .map((d) => ({ ...summaryFor(d.data(), d.id, uid), createdAt: d.data().createdAt?.toMillis?.() ?? 0 }))
-    .sort((a, b) => order[a.status] - order[b.status] || b.createdAt - a.createdAt);
+    .sort((a, b) => a.legacy - b.legacy || (order[a.status] ?? 3) - (order[b.status] ?? 3) || b.createdAt - a.createdAt);
 }
 
-async function createGame(user, { name, turnHours, maxDays, earlyResolve }) {
-  const hours = TURN_HOURS.includes(Number(turnHours)) ? Number(turnHours) : 24;
-  const days = Number.isInteger(Number(maxDays)) && Number(maxDays) >= engine.MIN_DAYS && Number(maxDays) <= engine.MAX_DAYS_LIMIT
-    ? Number(maxDays) : engine.MAX_DAYS;
+async function createGame(user, { name, turnSeconds }) {
   const ref = games().doc();
   const game = {
+    kind: GAME_KIND,
     code: randomCode(),
-    name: String(name || `Secteur ${Math.floor(Math.random() * 900 + 100)}`).trim().slice(0, 32),
+    name: String(name || `Château n°${Math.floor(Math.random() * 900 + 100)}`).trim().slice(0, 32),
     hostId: user.uid,
     status: 'lobby',
-    turnHours: hours,
-    maxDays: days,
-    earlyResolve: earlyResolve !== false,
+    turnSeconds: TURN_SECONDS.includes(Number(turnSeconds)) ? Number(turnSeconds) : 180,
     playerIds: [user.uid],
-    players: [{ uid: user.uid, name: user.name, ...engine.freeLook([]) }],
+    players: [{ uid: user.uid, name: user.name }],
     createdAt: new Date(),
   };
   await ref.set(game);
   return viewFor(game, ref.id, user.uid, []);
+}
+
+function addToLobby(game, uid, name) {
+  if (game.playerIds.includes(uid)) return false;
+  if (isLegacy(game)) throw new GameError(409, 'Cette partie appartient à l\'ancien jeu.');
+  if (game.status !== 'lobby') throw new GameError(409, 'La partie a déjà commencé.');
+  if (game.players.length >= engine.MAX_PLAYERS) throw new GameError(409, 'La partie est complète.');
+  game.playerIds.push(uid);
+  game.players.push({ uid, name });
+  return true;
 }
 
 async function joinGame(user, code) {
@@ -232,17 +292,12 @@ async function joinGame(user, code) {
   const ref = snap.docs[0].ref;
   await db.runTransaction(async (tx) => {
     const game = (await tx.get(ref)).data();
-    if (game.playerIds.includes(user.uid)) return;
-    if (game.status !== 'lobby') throw new GameError(409, 'La partie a déjà commencé.');
-    if (game.players.length >= engine.MAX_PLAYERS) throw new GameError(409, 'La partie est complète.');
-    game.playerIds.push(user.uid);
-    game.players.push({ uid: user.uid, name: user.name, ...engine.freeLook(game.players) });
-    tx.update(ref, { playerIds: game.playerIds, players: game.players });
+    if (addToLobby(game, user.uid, user.name)) tx.update(ref, { playerIds: game.playerIds, players: game.players });
   });
   return loadView(ref, user.uid);
 }
 
-/* Joueurs inscrits que l'hôte peut encore ajouter à la partie (ceux qui n'y sont pas déjà) */
+/* Joueurs inscrits que l'hôte peut encore ajouter à la partie */
 async function listCandidates(user, id) {
   const snap = await games().doc(id).get();
   if (!snap.exists) throw new GameError(404, 'Partie introuvable.');
@@ -256,7 +311,6 @@ async function listCandidates(user, id) {
     .sort((a, b) => a.localeCompare(b, 'fr', { sensitivity: 'base' }));
 }
 
-/* L'hôte ajoute directement un joueur inscrit à la partie, par son pseudo */
 async function addPlayer(user, id, username) {
   const ref = games().doc(id);
   const key = String(username || '').trim().toLowerCase();
@@ -268,21 +322,14 @@ async function addPlayer(user, id, username) {
     if (!snap.exists) throw new GameError(404, 'Partie introuvable.');
     const game = snap.data();
     if (game.hostId !== user.uid) throw new GameError(403, 'Seul l\'hôte peut ajouter un joueur.');
-    if (game.status !== 'lobby') throw new GameError(409, 'La partie a déjà commencé.');
     if (game.playerIds.includes(userSnap.id)) throw new GameError(409, 'Ce joueur fait déjà partie de la partie.');
-    if (game.players.length >= engine.MAX_PLAYERS) throw new GameError(409, 'La partie est complète.');
-    game.playerIds.push(userSnap.id);
-    game.players.push({ uid: userSnap.id, name: userSnap.data().username, ...engine.freeLook(game.players) });
+    addToLobby(game, userSnap.id, userSnap.data().username);
     tx.update(ref, { playerIds: game.playerIds, players: game.players });
     return game;
   });
   await push.sendMany([{
     uid: userSnap.id,
-    payload: {
-      title: `➕ ${added.name}`,
-      body: `${user.name} t'a ajouté à sa partie.`,
-      url: `/game/${id}`, tag: `game-${id}`,
-    },
+    payload: { title: `🏰 ${added.name}`, body: `${user.name} t'invite dans son château.`, url: `/game/${id}`, tag: `game-${id}` },
   }]);
   return loadView(ref, user.uid);
 }
@@ -302,44 +349,22 @@ async function leaveGame(user, id) {
   });
 }
 
-/* Choix de la couleur et/ou de l'emblème dans le lobby (uniques dans la partie) */
-async function setLook(user, id, { color, icon } = {}) {
-  const ref = games().doc(id);
-  await db.runTransaction(async (tx) => {
-    const snap = await tx.get(ref);
-    if (!snap.exists) throw new GameError(404, 'Partie introuvable.');
-    const game = snap.data();
-    const me = game.players.find((p) => p.uid === user.uid);
-    if (!me) throw new GameError(403, 'Tu ne fais pas partie de cette partie.');
-    if (game.status !== 'lobby') throw new GameError(409, 'La partie a déjà commencé.');
-    const others = game.players.filter((p) => p !== me);
-    if (color !== undefined) {
-      if (!engine.COLORS.includes(color)) throw new GameError(400, 'Couleur invalide.');
-      if (others.some((p) => p.color === color)) throw new GameError(409, 'Couleur déjà prise.');
-      me.color = color;
-    }
-    if (icon !== undefined) {
-      if (!engine.EMBLEMS.includes(icon)) throw new GameError(400, 'Emblème invalide.');
-      if (others.some((p) => p.icon === icon)) throw new GameError(409, 'Emblème déjà pris.');
-      me.icon = icon;
-    }
-    tx.update(ref, { players: game.players });
-  });
-  return loadView(ref, user.uid);
-}
-
-/* L'hôte supprime définitivement la partie, quel que soit son état (ordres compris) */
+/* L'hôte supprime définitivement la partie, quel que soit son état (tchat compris) */
 async function deleteGame(user, id) {
   const ref = games().doc(id);
   const snap = await ref.get();
   if (!snap.exists) throw new GameError(404, 'Partie introuvable.');
   const game = snap.data();
   if (game.hostId !== user.uid) throw new GameError(403, 'Seul l\'hôte peut supprimer la partie.');
-  const batch = db.batch();
-  (await ordersOf(ref).get()).docs.forEach((d) => batch.delete(d.ref));
-  batch.delete(ref);
-  await batch.commit();
-  if (game.status !== 'lobby') {
+  const subs = await Promise.all(['chat', 'orders'].map((c) => ref.collection(c).get()));
+  const docs = subs.flatMap((s) => s.docs);
+  for (let i = 0; i < docs.length; i += 450) {
+    const batch = db.batch();
+    docs.slice(i, i + 450).forEach((d) => batch.delete(d.ref));
+    await batch.commit();
+  }
+  await ref.delete();
+  if (game.status === 'running') {
     await push.sendMany(game.players.filter((p) => p.uid !== user.uid).map((p) => ({
       uid: p.uid,
       payload: { title: `🗑 ${game.name}`, body: 'L\'hôte a supprimé la partie.', url: '/', tag: `game-${id}` },
@@ -347,99 +372,152 @@ async function deleteGame(user, id) {
   }
 }
 
+// ── Partie ───────────────────────────────────────────────────────────────────
+
 async function launchGame(user, id) {
   const ref = games().doc(id);
   const started = await db.runTransaction(async (tx) => {
     const snap = await tx.get(ref);
     if (!snap.exists) throw new GameError(404, 'Partie introuvable.');
     const game = snap.data();
+    if (isLegacy(game)) throw new GameError(409, 'Cette partie appartient à l\'ancien jeu.');
     if (game.hostId !== user.uid) throw new GameError(403, 'Seul l\'hôte peut lancer la partie.');
     if (game.status !== 'lobby') throw new GameError(409, 'La partie a déjà commencé.');
     if (game.players.length < MIN_PLAYERS) throw new GameError(409, `Il faut au moins ${MIN_PLAYERS} joueurs.`);
     engine.startGame(game);
     game.startedAt = Date.now();
-    game.deadline = game.startedAt + game.turnHours * HOUR;
+    resetDeadline(game);
     tx.set(ref, game);
     return game;
   });
-  await push.sendMany(launchMessages(id, started));
+  await push.sendMany(started.players.map((p, i) => ({
+    uid: p.uid,
+    payload: {
+      title: `🏰 ${started.name} a commencé`,
+      body: i === started.killer ? 'Tu es le Tueur. Choisis ta position pour la première manche.' : 'Tu es un Survivant. Méfie-toi de tout le monde.',
+      url: `/game/${id}`, tag: `game-${id}`,
+    },
+  })));
   return loadView(ref, user.uid);
 }
 
 async function getGame(user, id) {
   const ref = games().doc(id);
-  await maybeResolve(ref);
+  await mutate(ref);
   return loadView(ref, user.uid);
 }
 
-async function submitOrders(user, id, rawOrders, ready) {
+/* Phase 1 : le Tueur choisit sa position et, éventuellement, le Blackout */
+async function chooseOrder(user, id, { position, blackout } = {}) {
   const ref = games().doc(id);
-  const snap = await ref.get();
-  if (!snap.exists) throw new GameError(404, 'Partie introuvable.');
-  const game = snap.data();
-  const idx = game.players.findIndex((p) => p.uid === user.uid);
-  if (idx < 0) throw new GameError(403, 'Tu ne fais pas partie de cette partie.');
-  if (game.status !== 'running' || game.version !== engine.RULES_VERSION) throw new GameError(409, 'La partie n\'est pas en cours.');
-
-  let orders;
-  try {
-    orders = engine.sanitizeOrders(rawOrders, game, idx);
-  } catch (e) {
-    throw new GameError(400, e.message);
-  }
-  await ordersOf(ref).doc(user.uid).set({ day: game.day, orders, ready: !!ready, updatedAt: new Date() });
-  return getGame(user, id);
+  await mutate(ref, (game) => {
+    const idx = playerIndex(game, user.uid);
+    requireRunning(game);
+    if (idx !== game.killer) throw new GameError(403, 'Seul le Tueur choisit sa position.');
+    rule(() => engine.chooseOrder(game, position, !!blackout));
+    resetDeadline(game);
+  });
+  return loadView(ref, user.uid);
 }
 
-/* Don immédiat de ressources à un autre joueur, sans contrepartie garantie */
-async function giveResources(user, id, to, vec) {
+/* Phase 2 : action du joueur dont c'est le tour */
+async function act(user, id, body = {}) {
   const ref = games().doc(id);
-  const done = await db.runTransaction(async (tx) => {
-    const snap = await tx.get(ref);
-    if (!snap.exists) throw new GameError(404, 'Partie introuvable.');
-    const game = snap.data();
-    const idx = game.players.findIndex((p) => p.uid === user.uid);
-    if (idx < 0) throw new GameError(403, 'Tu ne fais pas partie de cette partie.');
-    if (game.status !== 'running' || game.version !== engine.RULES_VERSION) throw new GameError(409, 'La partie n\'est pas en cours.');
-    if (Date.now() >= game.deadline) throw new GameError(409, 'Le tour est en cours de résolution.');
-    // le paiement déjà engagé au Marché Noir ne peut pas être donné
-    const mine = (await tx.get(ordersOf(ref).doc(user.uid))).data();
-    let given;
-    try {
-      given = engine.give(game, idx, Number(to), vec, mine?.day === game.day ? mine.orders.pay : null);
-    } catch (e) {
-      throw new GameError(400, e.message);
-    }
-    tx.update(ref, { players: game.players, feed: game.feed });
-    return { game, given };
+  await mutate(ref, (game) => {
+    const idx = playerIndex(game, user.uid);
+    requireRunning(game);
+    if (game.deadline <= Date.now()) throw new GameError(409, 'Trop tard : le délai est écoulé.');
+    const { step, dest, target } = body;
+    const roundOver = rule(() => engine.act(game, idx, { step, dest, target }));
+    // nouveau tour (ou nouvelle manche) : nouveau délai ; tour entamé : le délai court toujours
+    if (roundOver || !game.pending) resetDeadline(game);
+  });
+  return loadView(ref, user.uid);
+}
+
+/* Message anonyme sur le mur de sa salle, quand on est caché */
+async function writeWall(user, id, text) {
+  const ref = games().doc(id);
+  await mutate(ref, (game) => {
+    const idx = playerIndex(game, user.uid);
+    requireRunning(game);
+    rule(() => engine.writeWall(game, idx, text));
+  });
+  return loadView(ref, user.uid);
+}
+
+/* Le fantôme d'un mort passe dans une salle voisine, à tout moment */
+async function ghostMove(user, id, dest) {
+  const ref = games().doc(id);
+  await mutate(ref, (game) => {
+    const idx = playerIndex(game, user.uid);
+    rule(() => engine.ghostMove(game, idx, dest));
+  });
+  return loadView(ref, user.uid);
+}
+
+/* Un mort demande à tout voir : le Tueur est prévenu */
+async function requestSight(user, id) {
+  const ref = games().doc(id);
+  const game = await mutate(ref, (g) => {
+    const idx = playerIndex(g, user.uid);
+    rule(() => engine.requestSight(g, idx));
   });
   await push.sendMany([{
-    uid: done.game.players[Number(to)].uid,
+    uid: game.players[game.killer].uid,
+    payload: { title: `👁 ${game.name}`, body: `${user.name}, mort, demande à tout voir. À toi de décider.`, url: `/game/${id}`, tag: `sight-${id}` },
+  }]);
+  return loadView(ref, user.uid);
+}
+
+/* Le Tueur accepte ou refuse la demande d'un mort */
+async function answerSight(user, id, target, accept) {
+  const ref = games().doc(id);
+  const idx = Number(target);
+  const game = await mutate(ref, (g) => {
+    const by = playerIndex(g, user.uid);
+    rule(() => engine.answerSight(g, by, idx, !!accept));
+  });
+  await push.sendMany([{
+    uid: game.players[idx].uid,
     payload: {
-      title: `🎁 ${done.game.name}`,
-      body: `${user.name} t'envoie ${vecPlain(done.given)}.`,
-      url: `/game/${id}`, tag: `game-${id}-gift`,
+      title: `👁 ${game.name}`,
+      body: accept ? 'Ta demande est acceptée : tu vois tout le château.' : 'Ta demande est refusée : ton fantôme ne peut qu\'errer.',
+      url: `/game/${id}`, tag: `sight-${id}`,
     },
   }]);
   return loadView(ref, user.uid);
 }
 
-/* Appelé par Cloud Scheduler : résout les parties arrivées à échéance et relance les retardataires */
+/* Tchat : seulement dans le salon d'attente (le débat se tient hors du jeu) */
+async function postMessage(user, id, text) {
+  const ref = games().doc(id);
+  const msg = String(text || '').trim().slice(0, CHAT_MAX_LEN);
+  if (!msg) throw new GameError(400, 'Message vide.');
+  const snap = await ref.get();
+  if (!snap.exists) throw new GameError(404, 'Partie introuvable.');
+  const game = snap.data();
+  const idx = playerIndex(game, user.uid);
+  if (game.status !== 'lobby') throw new GameError(409, 'Le tchat n\'est ouvert que dans le salon d\'attente.');
+  await chatOf(ref).add({ idx, name: user.name, text: msg, round: game.round ?? 0, at: Date.now() });
+  return loadView(ref, user.uid);
+}
+
+/* Appelé par Cloud Scheduler : fait avancer les parties arrivées à échéance */
 async function tick() {
   const snap = await games().where('status', '==', 'running').get();
   const now = Date.now();
-  let resolved = 0;
-  let reminded = 0;
+  let advanced = 0;
   for (const doc of snap.docs) {
-    if (doc.data().deadline <= now) {
-      if (await maybeResolve(doc.ref)) resolved++;
-    } else if (push.enabled && await remindLatecomers(doc, now)) {
-      reminded++;
-    }
+    const game = doc.data();
+    if (isLegacy(game) || !(game.deadline <= now)) continue;
+    await mutate(doc.ref);
+    advanced++;
   }
-  return { checked: snap.size, resolved, reminded };
+  return { checked: snap.size, advanced };
 }
 
 module.exports = {
-  GameError, listMyGames, createGame, joinGame, listCandidates, addPlayer, leaveGame, setLook, deleteGame, launchGame, getGame, submitOrders, giveResources, tick,
+  GameError, TURN_SECONDS, listMyGames, createGame, joinGame, listCandidates, addPlayer, leaveGame, deleteGame,
+  launchGame, getGame, chooseOrder, act, writeWall, ghostMove, requestSight, answerSight, postMessage, tick,
 };

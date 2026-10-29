@@ -1,8 +1,8 @@
 <template>
   <div class="page narrow" style="max-width:480px">
     <div class="panel" style="padding:28px">
-      <h1 class="hero-title">RAZOONIUM</h1>
-      <p class="sub">Un rôle, une ressource. Troquer, trahir, raffiner le plus de Razoonium.</p>
+      <h1 class="hero-title">Le Château des Ténèbres</h1>
+      <p class="sub">Un tueur rôde parmi vous. Cachez-vous, écoutez, accusez… et frappez le premier.</p>
 
       <div class="tabs">
         <button :class="{ on: mode === 'login' }" @click="mode = 'login'">Connexion</button>
@@ -23,7 +23,7 @@
         </label>
         <div class="error-msg">{{ error }}</div>
         <button class="btn primary block" type="submit" :disabled="busy">
-          {{ mode === 'login' ? 'Accéder au terminal ▸' : 'Créer mon dôme ▸' }}
+          {{ mode === 'login' ? 'Franchir le pont-levis ▸' : 'Signer le registre ▸' }}
         </button>
       </form>
 

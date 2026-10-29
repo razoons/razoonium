@@ -5,19 +5,19 @@ import { createVuetify } from 'vuetify';
 export default createVuetify({
   icons: { defaultSet: 'mdi' },
   theme: {
-    defaultTheme: 'razoonium',
+    defaultTheme: 'chateau',
     themes: {
-      razoonium: {
+      chateau: {
         dark: true,
         colors: {
-          background: '#04060d',
-          surface: '#0a1226',
-          primary: '#00f0ff',
-          secondary: '#ff2bd6',
-          success: '#9dff4a',
-          warning: '#ffb020',
-          error: '#ff4d6d',
-          info: '#8a7dff',
+          background: '#0a0807',
+          surface: '#1d1714',
+          primary: '#ffb347',
+          secondary: '#c9a24a',
+          success: '#7fae6a',
+          warning: '#ffb347',
+          error: '#c0232f',
+          info: '#5a6fa8',
         },
       },
     },

@@ -7,7 +7,7 @@
   "scripts": {
     "setup": "node scripts/setup.js",
     "secrets:vapid": "node scripts/vapid-secrets.js",
-    "dev": "concurrently \"cd backend && node --inspect=9229 server.js\" \"cd frontend && npm install && npm run dev\"",
+    "dev": "concurrently \"cd backend && node --watch --inspect=9229 server.js\" \"cd frontend && npm install && npm run dev\"",
     "build:frontend": "cd frontend && npm install && npm run build",
     "build:backend:dev": "gcloud builds submit --tag europe-west1-docker.pkg.dev/razoonium/api-razoonium/api-razoonium --project razoonium",
     "build:backend:prod": "gcloud builds submit --tag europe-west1-docker.pkg.dev/razoonium/api-razoonium/api-razoonium --project razoonium",

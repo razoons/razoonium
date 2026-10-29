@@ -1,6 +1,8 @@
-# 🪐 Razoonium
+# 🏰 Le Château des Ténèbres
 
-Jeu de troc, de négociation et de trahison au tour par tour (4 à 8 joueurs) en **Progressive Web App** — voir [rules.md](rules.md).
+Jeu de traître et de déduction sociale au tour par tour (4 à 10 joueurs) en **Progressive Web App** — voir [rules.md](rules.md) pour le cahier des charges.
+
+Un Tueur désigné en secret, des survivants qui se cachent, écoutent et accusent. Chaque manche : le Tueur choisit sa position, chacun agit à son tour (se cacher, se déplacer, frapper), puis le bilan tombe ; le débat se tient hors du jeu (WhatsApp…).
 
 Application web full-stack déployée sur **Google Cloud Run** (backend) et **Firebase Hosting** (frontend).
 
@@ -9,19 +11,22 @@ Application web full-stack déployée sur **Google Cloud Run** (backend) et **Fi
 - **Base de données** : Firestore
 - **PWA** : vite-plugin-pwa (manifest, service worker, installable sur mobile)
 - **Auth** : pseudo + mot de passe (scrypt), session JWT
-- **Résolution des tours** : Cloud Scheduler → `POST /api/cron/tick` toutes les 5 min, plus une résolution à la volée dès qu'un joueur consulte une partie échue
+- **Avancement des parties** : chaque joueur connecté interroge la partie toutes les 3 s, ce qui fait avancer les délais échus ; Cloud Scheduler → `POST /api/cron/tick` toutes les 5 min prend le relais quand personne n'est connecté
 
 ## Organisation du code
 
 | Fichier | Rôle |
 |---|---|
-| `backend/services/game.engine.js` | Règles du jeu (fonctions pures : validation des ordres, résolution d'un tour) |
-| `backend/services/game.service.js` | Parties Firestore : lobby, ordres secrets, résolution transactionnelle |
+| `backend/services/game.engine.js` | Règles du jeu (fonctions pures) : plan du château, perception, ordre de passage, actions, blackout, bilans |
+| `backend/services/game.service.js` | Parties Firestore : salon, transitions de phases transactionnelles, délais, vues filtrées par joueur, tchat, notifications |
 | `backend/services/auth.service.js` | Comptes et JWT |
-| `frontend/src/views/Game.vue` | Salle d'attente + console de jeu |
-| `frontend/src/styles/razoonium.css` | Thème néon |
+| `frontend/src/views/Game.vue` | Salon d'attente + partie (onglets Château, Journal) |
+| `frontend/src/components/CastleMap.vue` | Plan du château (salles, passages, bruits) |
+| `frontend/src/styles/chateau.css` | Thème gothique |
 
-Firestore : `users/{pseudo}`, `games/{id}` (état public de la partie), `games/{id}/orders/{uid}` (ordres secrets du jour : Marché Noir et raffinage, jamais renvoyés aux autres joueurs). Les dons sont appliqués immédiatement à `games/{id}` (`POST /api/games/:id/gift`).
+Firestore : `users/{pseudo}`, `games/{id}` (état complet de la partie, secrets compris : rôles, positions, salles — le serveur ne renvoie à chaque joueur que ce qu'il perçoit), `games/{id}/chat/{msgId}` (tchat du salon d'attente).
+
+Les parties de l'ancien jeu (Razoonium) restent listées en archive et peuvent seulement être supprimées par leur hôte.
 
 Icônes PWA : générées depuis `frontend/public/favicon.svg` avec `cd frontend && npx pwa-assets-generator`.
 
@@ -95,7 +100,7 @@ npm run dev   # backend :8080 + frontend :5173
 | `PORT` | normale | Port d'écoute du serveur (défaut : `8080`) |
 | `ALLOWED_ORIGIN` | normale | Origine CORS autorisée |
 | `GOOGLE_CLOUD_PROJECT` | normale | ID du projet GCP |
-| `MIN_PLAYERS` | normale | Joueurs minimum pour lancer (défaut : 4, mettre 2 pour tester) |
+| `MIN_PLAYERS` | normale | Joueurs minimum pour lancer (défaut : 4) |
 | `API_SECRET_KEY` | **secret** | Clé envoyée par Cloud Scheduler (en-tête `x-api-key`) |
 | `JWT_SECRET` | **secret** | Signature des sessions |
 | `VAPID_SUBJECT` | normale | Contact déclaré aux services push (URL du site) |

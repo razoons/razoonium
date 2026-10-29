@@ -7,7 +7,7 @@ self.addEventListener('push', (event) => {
   } catch {
     data = { body: event.data && event.data.text() };
   }
-  event.waitUntil(self.registration.showNotification(data.title || 'Razoonium', {
+  event.waitUntil(self.registration.showNotification(data.title || 'Le Château des Ténèbres', {
     body: data.body || '',
     icon: '/pwa-192x192.png',
     badge: '/pwa-64x64.png',

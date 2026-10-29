@@ -13,9 +13,13 @@ router.delete('/:id', ctrl.remove);
 router.get('/:id/candidates', ctrl.candidates);
 router.post('/:id/players', ctrl.addPlayer);
 router.delete('/:id/membership', ctrl.leave);
-router.put('/:id/look', ctrl.look);
 router.post('/:id/start', ctrl.start);
-router.put('/:id/orders', ctrl.orders);
-router.post('/:id/gift', ctrl.gift);
+router.put('/:id/order', ctrl.order);
+router.post('/:id/action', ctrl.action);
+router.post('/:id/wall', ctrl.wall);
+router.post('/:id/ghost', ctrl.ghost);
+router.post('/:id/sight', ctrl.sight);
+router.put('/:id/sight/:player', ctrl.sightAnswer);
+router.post('/:id/chat', ctrl.chat);
 
 module.exports = router;

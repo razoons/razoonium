@@ -29,10 +29,6 @@ async function leave(req, res) {
   res.status(204).end();
 }
 
-async function look(req, res) {
-  res.json(await games.setLook(req.user, req.params.id, req.body || {}));
-}
-
 async function remove(req, res) {
   await games.deleteGame(req.user, req.params.id);
   res.status(204).end();
@@ -42,18 +38,36 @@ async function start(req, res) {
   res.json(await games.launchGame(req.user, req.params.id));
 }
 
-async function orders(req, res) {
-  const { orders, ready } = req.body || {};
-  res.json(await games.submitOrders(req.user, req.params.id, orders, ready));
+async function order(req, res) {
+  res.json(await games.chooseOrder(req.user, req.params.id, req.body || {}));
 }
 
-async function gift(req, res) {
-  const { to, vec } = req.body || {};
-  res.json(await games.giveResources(req.user, req.params.id, to, vec));
+async function action(req, res) {
+  res.json(await games.act(req.user, req.params.id, req.body || {}));
+}
+
+async function wall(req, res) {
+  res.json(await games.writeWall(req.user, req.params.id, req.body?.text));
+}
+
+async function ghost(req, res) {
+  res.json(await games.ghostMove(req.user, req.params.id, req.body?.dest));
+}
+
+async function sight(req, res) {
+  res.json(await games.requestSight(req.user, req.params.id));
+}
+
+async function sightAnswer(req, res) {
+  res.json(await games.answerSight(req.user, req.params.id, req.params.player, req.body?.accept));
+}
+
+async function chat(req, res) {
+  res.json(await games.postMessage(req.user, req.params.id, req.body?.text));
 }
 
 async function tick(_req, res) {
   res.json(await games.tick());
 }
 
-module.exports = { list, create, join, candidates, addPlayer, get, leave, look, remove, start, orders, gift, tick };
+module.exports = { list, create, join, candidates, addPlayer, get, leave, remove, start, order, action, wall, ghost, sight, sightAnswer, chat, tick };
